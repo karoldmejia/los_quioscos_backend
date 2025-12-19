@@ -30,6 +30,12 @@ export class UserRepository extends IUserRepository {
           where: { user_id },
       });  
     }
+
+  async findByUsername(username: string): Promise<User | null> {
+      return this.repo.findOne({
+          where: { username },
+      });    }
+
   async save(user: User): Promise<User> {
       return this.repo.save(user);
   }

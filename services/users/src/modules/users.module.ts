@@ -8,10 +8,14 @@ import { TwilioService } from '../services/twilio.service';
 import { PhoneVerificationService } from '../services/phoneverification.service';
 import { PasswordService } from '../services/password.service';
 import { RedisModule } from './redis.module';
+import { Role } from '../entities/role.entity';
+import { UserRole } from '../entities/user_role.entity';
+import { RolePermission } from '../entities/role_permission.entity';
+import { Permission } from '../entities/permission.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User]),
+    TypeOrmModule.forFeature([User, Role, UserRole, RolePermission, Permission]),
     RedisModule
   ],
   providers: [UsersService,
@@ -21,5 +25,6 @@ import { RedisModule } from './redis.module';
         PasswordService,
   ],
   controllers: [UsersController],
+  exports: [UsersService, PasswordService],
 })
 export class UsersModule {}

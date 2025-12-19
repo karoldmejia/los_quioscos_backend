@@ -3,4 +3,5 @@ export class UserDto {
   password: string;
   phone: string;
   otp: string;
+  username: string; 
 }

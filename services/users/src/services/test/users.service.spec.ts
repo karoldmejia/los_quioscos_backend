@@ -12,6 +12,7 @@ describe('UsersService', () => {
   const userRepoMock = {
     findByEmail: jest.fn(),
     findByPhone: jest.fn(),
+    findByUsername: jest.fn(), 
     save: jest.fn(),
   };
 
@@ -28,6 +29,7 @@ describe('UsersService', () => {
     password: '123456',
     phone: '+573000000000',
     otp: '123456',
+    username: 'test'
   };
 
   beforeEach(async () => {
@@ -92,4 +94,33 @@ describe('UsersService', () => {
     expect(userRepoMock.save).toHaveBeenCalled();
     expect(result).toEqual({ id: 1 });
   });
+
+  describe('createOAuthUser', () => {
+  it('should return existing user if email already exists', async () => {
+    const existingUser = { id: 1, email: 'oauth@mail.com', username: 'oauth' };
+    service.findUserByEmail = jest.fn().mockResolvedValue(existingUser);
+    userRepoMock.save.mockResolvedValue({ id: 2 }); // Esto no debería llamarse realmente
+
+    const result = await service.createOAuthUser({ email: 'oauth@mail.com', username: 'oauth' });
+
+    expect(service.findUserByEmail).toHaveBeenCalledWith('oauth@mail.com');
+    expect(userRepoMock.save).not.toHaveBeenCalled(); // no debe crear nuevo usuario
+    expect(result).toEqual(existingUser);
+  });
+
+  it('should create a new user if email does not exist', async () => {
+    service.findUserByEmail = jest.fn().mockResolvedValue(null);
+    userRepoMock.save.mockResolvedValue({ id: 2, email: 'new@mail.com', username: 'newuser' });
+
+    const result = await service.createOAuthUser({ email: 'new@mail.com', username: 'newuser' });
+
+    expect(service.findUserByEmail).toHaveBeenCalledWith('new@mail.com');
+    expect(userRepoMock.save).toHaveBeenCalledWith(expect.objectContaining({
+      email: 'new@mail.com',
+      username: 'newuser',
+    }));
+    expect(result).toEqual({ id: 2, email: 'new@mail.com', username: 'newuser' });
+  });
+});
+
 });

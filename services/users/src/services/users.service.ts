@@ -22,10 +22,23 @@ export class UsersService {
         return this.userRepo.save(user);
     }
 
+    async createOAuthUser(data: {email: string; username: string; }): Promise<User> {
+        const {email, username} = data;
+
+        const existingUser = await this.findUserByEmail(email);
+        if (existingUser) return existingUser;
+
+        const user = new User();
+        user.email = email;
+        user.username = username;
+
+        return this.userRepo.save(user)
+    }
+
     // helper methods
 
     async validateUser(user: UserDto): Promise<void> {
-        const requiredFields = ['email', 'password', 'phone'];
+        const requiredFields = ['email', 'password', 'phone', 'username'];
         for (const field of requiredFields) {
         if (!user[field as keyof UserDto]) {
             throw new BadRequestException(`${field} is required`);
@@ -33,12 +46,17 @@ export class UsersService {
         }
 
         if (user.email){
-        const existingUserByEmail = await this.userRepo.findByEmail(user.email);
+        const existingUserByEmail = await this.findUserByEmail(user.email);
         if (existingUserByEmail) {
             throw new BadRequestException('Email already in use');
         }
     }
-        const existingUserByPhone = await this.userRepo.findByPhone(user.phone);    
+
+        const existingUserByUsername = await this.findUserByUsername(user.username);    
+        if (existingUserByUsername){
+            throw new BadRequestException('Username already in use');
+        }
+        const existingUserByPhone = await this.findUserByPhone(user.phone);    
         if (existingUserByPhone){
             throw new BadRequestException('Phone already in use');
         }
@@ -60,5 +78,9 @@ export class UsersService {
 
     async findUserByPhone(phone: string): Promise<User | null> {
         return this.userRepo.findByPhone(phone);
+    }
+
+    async findUserByUsername(username: string): Promise<User | null> {
+        return this.userRepo.findByUsername(username);
     }
 }
