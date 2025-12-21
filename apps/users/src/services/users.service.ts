@@ -5,6 +5,7 @@ import { UserMapper } from '../mappers/users.mappers';
 import { UserRepository } from '../repositories/impl/users.repository';
 import { PasswordService } from './password.service';
 import { PhoneVerificationService } from './phoneverification.service';
+import { RpcException } from '@nestjs/microservices';
 
 @Injectable()
 export class UsersService {
@@ -41,29 +42,29 @@ export class UsersService {
         const requiredFields = ['email', 'password', 'phone', 'username'];
         for (const field of requiredFields) {
         if (!user[field as keyof UserDto]) {
-            throw new BadRequestException(`${field} is required`);
+            throw new RpcException(`${field} is required`);
         }
         }
 
         if (user.email){
         const existingUserByEmail = await this.findUserByEmail(user.email);
         if (existingUserByEmail) {
-            throw new BadRequestException('Email already in use');
+            throw new RpcException('Email already in use');
         }
     }
 
         const existingUserByUsername = await this.findUserByUsername(user.username);    
         if (existingUserByUsername){
-            throw new BadRequestException('Username already in use');
+            throw new RpcException('Username already in use');
         }
         const existingUserByPhone = await this.findUserByPhone(user.phone);    
         if (existingUserByPhone){
-            throw new BadRequestException('Phone already in use');
+            throw new RpcException('Phone already in use');
         }
 
         const phoneVerified = await this.phoneVerificationService.verifyOtp(user.phone, user.otp);
         if (!phoneVerified) {
-            throw new BadRequestException('Phone not verified');
+            throw new RpcException('Phone not verified');
         }
 
     }

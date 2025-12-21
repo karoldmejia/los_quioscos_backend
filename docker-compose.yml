@@ -1,8 +1,11 @@
 services:
-  backend:
-    build: .
+  users:
+    build:
+      context: .
+      dockerfile: apps/users/Dockerfile
+    container_name: users
     ports:
-      - "3000:3000"
+      - "3001:3000"
     env_file:
       - .env
     depends_on:
@@ -11,6 +14,8 @@ services:
     volumes:
       - .:/app
       - /app/node_modules
+    command: npm run start:dev
+
 
   postgres:
     image: postgres:16
@@ -28,9 +33,9 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "6380:6379"
     volumes:
-     - redis_data:/data
+      - redis_data:/data
 
 volumes:
   postgres_data:
