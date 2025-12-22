@@ -15,7 +15,7 @@ describe('Users Microservice (TCP) - e2e', () => {
 
   const validUser = {
     email: 'test@mail.com',
-    password: '123456',
+    password: 'Password1!',
     phone: '+573000000000',
     otp: '123456',
     username: 'testuser'
@@ -95,5 +95,134 @@ describe('Users Microservice (TCP) - e2e', () => {
       expect(err.message).toContain('password is required');
     }
   });
+
+  it('request_otp - should send otp successfully', async () => {
+  const response = await client
+    .send({ cmd: 'request_otp' }, '+573001234567')
+    .toPromise();
+
+  expect(response).toEqual({ message: 'OTP sent' });
+});
+
+it('reset_password - should reset password successfully', async () => {
+  const user = await client
+    .send({ cmd: 'register_user' }, validUser)
+    .toPromise();
+
+  const response = await client
+    .send(
+      { cmd: 'reset_password' },
+      {
+        userId: user.user_id,
+        newPassword: 'NewPassword1!',
+        duplicatedNewPassword: 'NewPassword1!',
+        otp: '123456',
+      }
+    )
+    .toPromise();
+
+  expect(response).toEqual({
+    message: 'Password has been reset',
+  });
+});
+
+it('reset_password - should fail if user does not exist', async () => {
+  try {
+    await client
+      .send(
+        { cmd: 'reset_password' },
+        {
+          userId: 999,
+          newPassword: 'NewPassword1!',
+          duplicatedNewPassword: 'NewPassword1!',
+          otp: '123456',
+        }
+      )
+      .toPromise();
+
+    fail('Expected reset_password to throw');
+  } catch (err: any) {
+    expect(err.message).toContain('User not found');
+  }
+});
+
+
+it('reset_password - should fail if otp is invalid', async () => {
+  const phoneService = app.get(PhoneVerificationService);
+  const user = await client
+    .send({ cmd: 'register_user' }, validUser)
+    .toPromise();
+
+    (phoneService.verifyOtp as jest.Mock).mockResolvedValueOnce(false);
+
+  try {
+    await client
+      .send(
+        { cmd: 'reset_password' },
+        {
+          userId: user.user_id,
+          newPassword: 'NewPassword1!',
+          duplicatedNewPassword: 'NewPassword1!',
+          otp: '000000',
+        }
+      )
+      .toPromise();
+
+    fail('Expected reset_password to throw');
+  } catch (err: any) {
+    expect(err.message).toContain('Restauration code does not match');
+  }
+});
+
+it('reset_password - should fail if password is weak', async () => {
+  const user = await client
+    .send({ cmd: 'register_user' }, validUser)
+    .toPromise();
+
+  try {
+    await client
+      .send(
+        { cmd: 'reset_password' },
+        {
+          userId: user.user_id,
+          newPassword: 'weak',
+          duplicatedNewPassword: 'weak',
+          otp: '123456',
+        }
+      )
+      .toPromise();
+
+    fail('Expected reset_password to throw');
+  } catch (err: any) {
+    expect(err.message).toContain(
+      'Password does not meet security requirements'
+    );
+  }
+});
+
+it('reset_password - should fail if passwords do not match', async () => {
+  const user = await client
+    .send({ cmd: 'register_user' }, validUser)
+    .toPromise();
+
+  try {
+    await client
+      .send(
+        { cmd: 'reset_password' },
+        {
+          userId: user.user_id,
+          newPassword: 'NewPassword1!',
+          duplicatedNewPassword: 'OtherPassword1!',
+          otp: '123456',
+        }
+      )
+      .toPromise();
+
+    fail('Expected reset_password to throw');
+  } catch (err: any) {
+    expect(err.message).toContain('Passwords do not match');
+  }
+});
+
 
 });

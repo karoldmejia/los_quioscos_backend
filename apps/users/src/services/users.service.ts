@@ -36,6 +36,30 @@ export class UsersService {
         return this.userRepo.save(user)
     }
 
+    async resetPassword(userId: number, newPassword: string, duplicatedNewPassword: string, otp: string) {
+        const existingUser = await this.findUserById(userId)
+        if (!existingUser){
+            throw new RpcException('User not found')
+        }
+        if (existingUser.phone==null){
+            throw new RpcException('You do not have a phone registered. Please register it to be able to reset your password.')
+        }
+        const phoneverification = await this.phoneVerificationService.verifyOtp(existingUser.phone, otp);
+        if(!phoneverification){
+            throw new RpcException('Restauration code does not match')
+        }
+        if (!this.validatePassword(newPassword)) {
+            throw new RpcException('Password does not meet security requirements');
+        }
+        if (!this.validatePassword(duplicatedNewPassword)) {
+            throw new RpcException('Password confirmation is invalid');
+        }
+        if(newPassword != duplicatedNewPassword){
+            throw new RpcException('Passwords do not match')
+        }
+        return {message: 'Password has been reset'}
+    }
+
     // helper methods
 
     async validateUser(user: UserDto): Promise<void> {
@@ -67,7 +91,15 @@ export class UsersService {
             throw new RpcException('Phone not verified');
         }
 
+        if (!this.validatePassword(user.password)){
+            throw new RpcException('Password doesnt meet requirements');
+        }
     }
+
+    validatePassword(password: string): boolean {
+    return /^(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z]).{8,}$/.test(password);
+    }
+
 
     async findUserByEmail(email: string): Promise<User | null> {
         return this.userRepo.findByEmail(email);

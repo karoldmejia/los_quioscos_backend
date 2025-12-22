@@ -1,15 +1,17 @@
 import { Test } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
 import { UsersService } from '../users.service';
-import { UserRepository } from 'src/repositories/impl/users.repository';
+import { UserRepository } from '../../repositories/impl/users.repository';
 import { PasswordService } from '../password.service';
 import { PhoneVerificationService } from '../phoneverification.service';
-import { UserDto } from 'src/dtos/users.dto';
+import { UserDto } from '../../dtos/users.dto';
+import { RpcException } from '@nestjs/microservices';
 
 describe('UsersService', () => {
   let service: UsersService;
 
   const userRepoMock = {
+    findByUser_Id: jest.fn(),
     findByEmail: jest.fn(),
     findByPhone: jest.fn(),
     findByUsername: jest.fn(), 
@@ -26,7 +28,7 @@ describe('UsersService', () => {
 
   const validDto: UserDto = {
     email: 'test@mail.com',
-    password: '123456',
+    password: 'Password1!',
     phone: '+573000000000',
     otp: '123456',
     username: 'test'
@@ -50,7 +52,7 @@ describe('UsersService', () => {
     const dto = { ...validDto, phone: undefined };
 
     await expect(service.createUser(dto as any)).rejects.toThrow(
-      BadRequestException,
+      RpcException,
     );
   });
 
@@ -90,7 +92,7 @@ describe('UsersService', () => {
 
     const result = await service.createUser(validDto);
 
-    expect(passwordServiceMock.hashPassword).toHaveBeenCalledWith('123456');
+    expect(passwordServiceMock.hashPassword).toHaveBeenCalledWith('Password1!');
     expect(userRepoMock.save).toHaveBeenCalled();
     expect(result).toEqual({ id: 1 });
   });
@@ -99,12 +101,12 @@ describe('UsersService', () => {
   it('should return existing user if email already exists', async () => {
     const existingUser = { id: 1, email: 'oauth@mail.com', username: 'oauth' };
     service.findUserByEmail = jest.fn().mockResolvedValue(existingUser);
-    userRepoMock.save.mockResolvedValue({ id: 2 }); // Esto no debería llamarse realmente
+    userRepoMock.save.mockResolvedValue({ id: 2 });
 
     const result = await service.createOAuthUser({ email: 'oauth@mail.com', username: 'oauth' });
 
     expect(service.findUserByEmail).toHaveBeenCalledWith('oauth@mail.com');
-    expect(userRepoMock.save).not.toHaveBeenCalled(); // no debe crear nuevo usuario
+    expect(userRepoMock.save).not.toHaveBeenCalled();
     expect(result).toEqual(existingUser);
   });
 
@@ -122,5 +124,84 @@ describe('UsersService', () => {
     expect(result).toEqual({ id: 2, email: 'new@mail.com', username: 'newuser' });
   });
 });
+
+  describe('resetPassword', () => {
+
+    const userId = 1;
+    const baseUser = {
+      id: 1,
+      phone: '+573001234567',
+    } as any;
+    const validPassword = 'Password1!';
+
+    it('should throw if user has no phone registered', async () => {
+      userRepoMock.findByUser_Id.mockResolvedValue({
+        id: 1,
+        phone: null,
+      });
+
+      await expect(
+        service.resetPassword(userId, validPassword, validPassword, '123456')
+      ).rejects.toThrow(
+        'You do not have a phone registered'
+      );
+    });
+
+    it('should throw if otp is invalid', async () => {
+      userRepoMock.findByUser_Id.mockResolvedValue(baseUser);
+      phoneVerificationMock.verifyOtp.mockResolvedValue(false);
+
+      await expect(
+        service.resetPassword(userId, validPassword, validPassword, '123456')
+      ).rejects.toThrow(
+        'Restauration code does not match'
+      );
+    });
+
+    it('should throw if new password is invalid', async () => {
+      userRepoMock.findByUser_Id.mockResolvedValue(baseUser);
+      phoneVerificationMock.verifyOtp.mockResolvedValue(true);
+
+      await expect(
+        service.resetPassword(userId, 'weak', 'weak', '123456')
+      ).rejects.toThrow(
+        'Password does not meet security requirements'
+      );
+    });
+
+    it('should throw if password confirmation is invalid', async () => {
+      userRepoMock.findByUser_Id.mockResolvedValue(baseUser);
+      phoneVerificationMock.verifyOtp.mockResolvedValue(true);
+
+      await expect(
+        service.resetPassword(userId, validPassword, 'weak', '123456')
+      ).rejects.toThrow(
+        'Password confirmation is invalid'
+      );
+    });
+
+    it('should throw if passwords do not match', async () => {
+      userRepoMock.findByUser_Id.mockResolvedValue(baseUser);
+      phoneVerificationMock.verifyOtp.mockResolvedValue(true);
+
+      await expect(
+        service.resetPassword(userId, validPassword, 'Password2!', '123456')
+      ).rejects.toThrow(
+        'Passwords do not match'
+      );
+    });
+
+    it('should reset password successfully when all data is valid', async () => {
+      userRepoMock.findByUser_Id.mockResolvedValue(baseUser);
+      phoneVerificationMock.verifyOtp.mockResolvedValue(true);
+
+      await expect(
+        service.resetPassword(userId, validPassword, validPassword, '123456')
+      ).resolves.not.toThrow();
+    });
+
+  });
+
+
 
 });
