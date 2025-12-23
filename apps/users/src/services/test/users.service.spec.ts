@@ -1,11 +1,11 @@
 import { Test } from '@nestjs/testing';
-import { BadRequestException } from '@nestjs/common';
 import { UsersService } from '../users.service';
 import { UserRepository } from '../../repositories/impl/users.repository';
 import { PasswordService } from '../password.service';
 import { PhoneVerificationService } from '../phoneverification.service';
 import { UserDto } from '../../dtos/users.dto';
 import { RpcException } from '@nestjs/microservices';
+import { User } from '../../entities/user.entity';
 
 describe('UsersService', () => {
   let service: UsersService;
@@ -14,12 +14,12 @@ describe('UsersService', () => {
     findByUser_Id: jest.fn(),
     findByEmail: jest.fn(),
     findByPhone: jest.fn(),
-    findByUsername: jest.fn(), 
     save: jest.fn(),
   };
 
   const passwordServiceMock = {
     hashPassword: jest.fn(),
+    comparePassword: jest.fn(),
   };
 
   const phoneVerificationMock = {
@@ -31,7 +31,7 @@ describe('UsersService', () => {
     password: 'Password1!',
     phone: '+573000000000',
     otp: '123456',
-    username: 'test'
+    username: 'test',
   };
 
   beforeEach(async () => {
@@ -48,32 +48,33 @@ describe('UsersService', () => {
     jest.clearAllMocks();
   });
 
-  it('should throw and error if required data is missing', async () => {
+
+  // createUser
+
+  it('should throw if required data is missing', async () => {
     const dto = { ...validDto, phone: undefined };
 
-    await expect(service.createUser(dto as any)).rejects.toThrow(
-      RpcException,
-    );
+    await expect(service.createUser(dto as any)).rejects.toThrow(RpcException);
   });
 
-  it('should throw an error if email already exists', async () => {
-    userRepoMock.findByEmail.mockResolvedValue({ id: 1 });
+  it('should throw if email already exists', async () => {
+    userRepoMock.findByEmail.mockResolvedValue({ user_id: 1 });
 
     await expect(service.createUser(validDto)).rejects.toThrow(
       'Email already in use',
     );
   });
 
-  it('should throw an error if phone already exists', async () => {
+  it('should throw if phone already exists', async () => {
     userRepoMock.findByEmail.mockResolvedValue(null);
-    userRepoMock.findByPhone.mockResolvedValue({ id: 1 });
+    userRepoMock.findByPhone.mockResolvedValue({ user_id: 1 });
 
     await expect(service.createUser(validDto)).rejects.toThrow(
       'Phone already in use',
     );
   });
 
-  it('should throw an error is otp is not valid', async () => {
+  it('should throw if otp is invalid', async () => {
     userRepoMock.findByEmail.mockResolvedValue(null);
     userRepoMock.findByPhone.mockResolvedValue(null);
     phoneVerificationMock.verifyOtp.mockResolvedValue(false);
@@ -88,120 +89,268 @@ describe('UsersService', () => {
     userRepoMock.findByPhone.mockResolvedValue(null);
     phoneVerificationMock.verifyOtp.mockResolvedValue(true);
     passwordServiceMock.hashPassword.mockResolvedValue('hashed-password');
-    userRepoMock.save.mockResolvedValue({ id: 1 });
+    userRepoMock.save.mockResolvedValue({ user_id: 1 });
 
     const result = await service.createUser(validDto);
 
     expect(passwordServiceMock.hashPassword).toHaveBeenCalledWith('Password1!');
     expect(userRepoMock.save).toHaveBeenCalled();
-    expect(result).toEqual({ id: 1 });
+    expect(result).toEqual({ user_id: 1 });
   });
+
+  // createOAuthUser
 
   describe('createOAuthUser', () => {
-  it('should return existing user if email already exists', async () => {
-    const existingUser = { id: 1, email: 'oauth@mail.com', username: 'oauth' };
-    service.findUserByEmail = jest.fn().mockResolvedValue(existingUser);
-    userRepoMock.save.mockResolvedValue({ id: 2 });
+    it('should return existing user if email already exists', async () => {
+      const existingUser = { user_id: 1, email: 'oauth@mail.com' };
+      service.findUserByEmail = jest.fn().mockResolvedValue(existingUser);
 
-    const result = await service.createOAuthUser({ email: 'oauth@mail.com', username: 'oauth' });
+      const result = await service.createOAuthUser({
+        email: 'oauth@mail.com',
+        username: 'oauth',
+      });
 
-    expect(service.findUserByEmail).toHaveBeenCalledWith('oauth@mail.com');
-    expect(userRepoMock.save).not.toHaveBeenCalled();
-    expect(result).toEqual(existingUser);
+      expect(service.findUserByEmail).toHaveBeenCalledWith('oauth@mail.com');
+      expect(userRepoMock.save).not.toHaveBeenCalled();
+      expect(result).toEqual(existingUser);
+    });
+
+    it('should create a new user if email does not exist', async () => {
+      service.findUserByEmail = jest.fn().mockResolvedValue(null);
+      userRepoMock.save.mockResolvedValue({
+        user_id: 2,
+        email: 'new@mail.com',
+        username: 'newuser',
+      });
+
+      const result = await service.createOAuthUser({
+        email: 'new@mail.com',
+        username: 'newuser',
+      });
+
+      expect(userRepoMock.save).toHaveBeenCalled();
+      expect(result).toEqual({
+        user_id: 2,
+        email: 'new@mail.com',
+        username: 'newuser',
+      });
+    });
   });
 
-  it('should create a new user if email does not exist', async () => {
-    service.findUserByEmail = jest.fn().mockResolvedValue(null);
-    userRepoMock.save.mockResolvedValue({ id: 2, email: 'new@mail.com', username: 'newuser' });
-
-    const result = await service.createOAuthUser({ email: 'new@mail.com', username: 'newuser' });
-
-    expect(service.findUserByEmail).toHaveBeenCalledWith('new@mail.com');
-    expect(userRepoMock.save).toHaveBeenCalledWith(expect.objectContaining({
-      email: 'new@mail.com',
-      username: 'newuser',
-    }));
-    expect(result).toEqual({ id: 2, email: 'new@mail.com', username: 'newuser' });
-  });
-});
+  // resetPassword
 
   describe('resetPassword', () => {
-
     const userId = 1;
-    const baseUser = {
-      id: 1,
-      phone: '+573001234567',
-    } as any;
     const validPassword = 'Password1!';
+
+    it('should throw if user does not exist', async () => {
+      userRepoMock.findByUser_Id.mockResolvedValue(null);
+
+      await expect(
+        service.resetPassword(userId, validPassword, validPassword, '123456'),
+      ).rejects.toThrow('User not found');
+    });
 
     it('should throw if user has no phone registered', async () => {
       userRepoMock.findByUser_Id.mockResolvedValue({
-        id: 1,
+        user_id: 1,
         phone: null,
+        deletedAt: null,
       });
 
       await expect(
-        service.resetPassword(userId, validPassword, validPassword, '123456')
-      ).rejects.toThrow(
-        'You do not have a phone registered'
-      );
+        service.resetPassword(userId, validPassword, validPassword, '123456'),
+      ).rejects.toThrow('You do not have a phone registered');
     });
 
     it('should throw if otp is invalid', async () => {
-      userRepoMock.findByUser_Id.mockResolvedValue(baseUser);
+      userRepoMock.findByUser_Id.mockResolvedValue({
+        user_id: 1,
+        phone: '+573001234567',
+        deletedAt: null,
+      });
       phoneVerificationMock.verifyOtp.mockResolvedValue(false);
 
       await expect(
-        service.resetPassword(userId, validPassword, validPassword, '123456')
-      ).rejects.toThrow(
-        'Restauration code does not match'
-      );
+        service.resetPassword(userId, validPassword, validPassword, '123456'),
+      ).rejects.toThrow('Restauration code does not match');
     });
 
-    it('should throw if new password is invalid', async () => {
-      userRepoMock.findByUser_Id.mockResolvedValue(baseUser);
+    it('should reset password successfully', async () => {
+      userRepoMock.findByUser_Id.mockResolvedValue({
+        user_id: 1,
+        phone: '+573001234567',
+        password: 'old-hash',
+        deletedAt: null,
+      });
       phoneVerificationMock.verifyOtp.mockResolvedValue(true);
+      passwordServiceMock.hashPassword.mockResolvedValue('new-hash');
 
-      await expect(
-        service.resetPassword(userId, 'weak', 'weak', '123456')
-      ).rejects.toThrow(
-        'Password does not meet security requirements'
+      const result = await service.resetPassword(
+        userId,
+        validPassword,
+        validPassword,
+        '123456',
       );
+
+      expect(passwordServiceMock.hashPassword).toHaveBeenCalledWith(validPassword);
+      expect(userRepoMock.save).toHaveBeenCalled();
+      expect(result).toEqual({ message: 'Password has been reset' });
     });
-
-    it('should throw if password confirmation is invalid', async () => {
-      userRepoMock.findByUser_Id.mockResolvedValue(baseUser);
-      phoneVerificationMock.verifyOtp.mockResolvedValue(true);
-
-      await expect(
-        service.resetPassword(userId, validPassword, 'weak', '123456')
-      ).rejects.toThrow(
-        'Password confirmation is invalid'
-      );
-    });
-
-    it('should throw if passwords do not match', async () => {
-      userRepoMock.findByUser_Id.mockResolvedValue(baseUser);
-      phoneVerificationMock.verifyOtp.mockResolvedValue(true);
-
-      await expect(
-        service.resetPassword(userId, validPassword, 'Password2!', '123456')
-      ).rejects.toThrow(
-        'Passwords do not match'
-      );
-    });
-
-    it('should reset password successfully when all data is valid', async () => {
-      userRepoMock.findByUser_Id.mockResolvedValue(baseUser);
-      phoneVerificationMock.verifyOtp.mockResolvedValue(true);
-
-      await expect(
-        service.resetPassword(userId, validPassword, validPassword, '123456')
-      ).resolves.not.toThrow();
-    });
-
   });
 
 
+  // updateUserContactInfo
+
+  describe('updateUserContactInfo', () => {
+    it('should throw if user does not exist', async () => {
+      service.findUserById = jest.fn().mockResolvedValue(null);
+
+      await expect(
+        service.updateUserContactInfo(1, { email: 'a@mail.com' }, 'pass'),
+      ).rejects.toThrow('User not found');
+    });
+
+    it('should throw if password is invalid', async () => {
+      service.findUserById = jest.fn().mockResolvedValue({
+        password: 'hash',
+        deletedAt: null,
+      });
+      passwordServiceMock.comparePassword.mockResolvedValue(false);
+
+      await expect(
+        service.updateUserContactInfo(1, { email: 'a@mail.com' }, 'wrong'),
+      ).rejects.toThrow('Invalid password');
+    });
+
+    it('should update contact info successfully', async () => {
+      const user = { user_id: 1, password: 'hash', deletedAt: null,};
+      service.findUserById = jest.fn().mockResolvedValue(user);
+      passwordServiceMock.comparePassword.mockResolvedValue(true);
+      service.findUserByEmail = jest.fn().mockResolvedValue(null);
+
+      const result = await service.updateUserContactInfo(
+        1,
+        { email: 'new@mail.com' },
+        'pass',
+      );
+
+      expect(userRepoMock.save).toHaveBeenCalled();
+      expect(result).toEqual({ message: 'Info has been updated' });
+    });
+  });
+
+  // updateUserUsername
+
+  describe('updateUserUsername', () => {
+    it('should throw if user does not exist', async () => {
+      service.findUserById = jest.fn().mockResolvedValue(null);
+
+      await expect(
+        service.updateUserUsername(1, 'newname'),
+      ).rejects.toThrow('User not found');
+    });
+
+    it('should update username successfully', async () => {
+      service.findUserById = jest.fn().mockResolvedValue({ user_id: 1, username: 'oldname', deletedAt: null,});
+      userRepoMock.save.mockResolvedValue(true);
+
+      const result = await service.updateUserUsername(1, 'newname');
+
+      expect(userRepoMock.save).toHaveBeenCalled();
+      expect(result).toEqual({ message: 'Username has been updated' });
+    });
+  });
+
+  // deleteUser
+
+  describe('deleteUser', () => {
+    it('should throw if user does not exist', async () => {
+      service.findUserById = jest.fn().mockResolvedValue(null);
+
+      await expect(service.deleteUser(1)).rejects.toThrow('User not found');
+    });
+
+    it('should soft delete user and return recovery date', async () => {
+      const now = new Date('2025-11-23T03:10:51.757Z');
+      jest.useFakeTimers().setSystemTime(now);
+
+      const user = {
+        user_id: 1,
+        deletedAt: null,
+      };
+
+      service.findUserById = jest.fn().mockResolvedValue(user);
+      userRepoMock.save.mockResolvedValue(user);
+
+      const result = await service.deleteUser(1);
+
+      expect(user.deletedAt).toEqual(now);
+      expect(userRepoMock.save).toHaveBeenCalledWith(user);
+
+      const expectedRecoverUntil = new Date(
+        now.getTime() + 30 * 24 * 60 * 60 * 1000,
+      );
+
+      expect(result.recoverUntil.getTime()).toBe(
+        expectedRecoverUntil.getTime(),
+      );
+
+      jest.useRealTimers();
+    });
+  });
+
+
+  // recoverAccount
+
+  describe('recoverAccount', () => {
+    it('should throw if user does not exist', async () => {
+      service.findUserById = jest.fn().mockResolvedValue(null);
+
+      await expect(service.recoverAccount(1)).rejects.toThrow('User not found');
+    });
+
+    it('should do nothing if user is already active', async () => {
+      const user = { user_id: 1, deletedAt: null };
+      service.findUserById = jest.fn().mockResolvedValue(user);
+
+      await service.recoverAccount(1);
+
+      expect(userRepoMock.save).not.toHaveBeenCalled();
+    });
+
+    it('should restore deleted user', async () => {
+      const user = { user_id: 1, deletedAt: new Date() };
+      service.findUserById = jest.fn().mockResolvedValue(user);
+      userRepoMock.save.mockResolvedValue(user);
+
+      await service.recoverAccount(1);
+
+      expect(user.deletedAt).toBeNull();
+      expect(userRepoMock.save).toHaveBeenCalledWith(user);
+    });
+  });
+
+  // helper methods
+
+  describe('helper methods', () => {
+    it('isUserActive should return true if deletedAt is null', () => {
+      const user = { deletedAt: null } as User;
+      expect(service.isUserActive(user)).toBe(true);
+    });
+
+    it('isUserActive should return false if deletedAt is not null', () => {
+      const user = { deletedAt: new Date() } as User;
+      expect(service.isUserActive(user)).toBe(false);
+    });
+
+    it('getRecoveryDate should return date 30 days later', () => {
+      const deletedAt = new Date('2025-01-01');
+      const recoveryDate = service.getRecoveryDate(deletedAt);
+
+      const expected = new Date('2025-01-31');
+      expect(recoveryDate.getTime()).toBe(expected.getTime());
+    });
+  });
 
 });

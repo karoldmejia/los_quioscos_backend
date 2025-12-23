@@ -19,6 +19,7 @@ describe('Auth Microservice (TCP) - e2e', () => {
     findUserByEmail: jest.fn(),
     findUserByPhone: jest.fn(),
     createOAuthUser: jest.fn(),
+    getRecoveryDate: jest.fn(() => new Date()),
   };
 
   const mockPasswordService = {
@@ -81,15 +82,26 @@ describe('Auth Microservice (TCP) - e2e', () => {
   });
 
   it('auth.login - should login successfully', async () => {
-    mockUsersService.findUserByUsername.mockResolvedValue(validUser);
+    mockUsersService.findUserByEmail.mockResolvedValue({
+      user_id: 1,
+      username: 'testuser',
+      email: 'test@example.com',
+      deletedAt: null,
+      password: 'hashed',
+    });
+
     mockPasswordService.comparePassword.mockResolvedValue(true);
 
-    const loginDto = { username: 'testuser', password: '12345678' };
-
-    const response = await client.send({ cmd: 'auth.login' }, loginDto).toPromise();
+    const response = await client
+      .send({ cmd: 'auth.login' }, {
+        email: 'test@example.com',
+        password: 'Password1!',
+      })
+      .toPromise();
 
     expect(response).toHaveProperty('access_token');
   });
+
 
   it('auth.login - should fail with wrong password', async () => {
     mockUsersService.findUserByUsername.mockResolvedValue(validUser);

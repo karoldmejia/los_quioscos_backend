@@ -7,21 +7,25 @@ export class User {
   @PrimaryGeneratedColumn()
   user_id: number;
 
-  @Column()
-  username: string;
+  @Column({ type: 'varchar', nullable: true })
+  username: string | null;
 
-  @Column({ unique: true, nullable: true })
-  email: string;
+  @Column({ type: 'varchar', unique: true, nullable: true })
+  email: string | null;
 
-  @Column({ unique: true, nullable: true })
-  phone: string;
+  @Column({ type: 'varchar', unique: true, nullable: true })
+  phone: string | null;
 
-  @Column({ nullable: true })
-  password: string;
+  @Column({ type: 'varchar', nullable: true })
+  password: string | null;
 
-  @Column({ nullable: true })
-  profile_photo_url: string;
+  @Column({ type: 'varchar', nullable: true })
+  profile_photo_url: string | null;
 
   @OneToMany(() => UserRole, ur => ur.user)
   user_roles: UserRole[];
+
+  @Column({type: 'timestamp', nullable: true, default: null})
+  deletedAt: Date | null;
+
 }

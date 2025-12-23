@@ -6,6 +6,8 @@ import { UserRepository } from '../repositories/impl/users.repository';
 import { PasswordService } from './password.service';
 import { PhoneVerificationService } from './phoneverification.service';
 import { RpcException } from '@nestjs/microservices';
+import { UpdateUserDto } from '../dtos/update-user.dto';
+import { Cron, CronExpression } from '@nestjs/schedule';
 
 @Injectable()
 export class UsersService {
@@ -38,7 +40,7 @@ export class UsersService {
 
     async resetPassword(userId: number, newPassword: string, duplicatedNewPassword: string, otp: string) {
         const existingUser = await this.findUserById(userId)
-        if (!existingUser){
+        if (!existingUser || !this.isUserActive(existingUser)){
             throw new RpcException('User not found')
         }
         if (existingUser.phone==null){
@@ -57,7 +59,103 @@ export class UsersService {
         if(newPassword != duplicatedNewPassword){
             throw new RpcException('Passwords do not match')
         }
+        existingUser.password = await this.passwordService.hashPassword(newPassword);
+        await this.userRepo.save(existingUser);
         return {message: 'Password has been reset'}
+    }
+
+    async updateUserContactInfo(userId: number, user: UpdateUserDto, password: string) {
+        const existingUser = await this.findUserById(userId);
+        if (!existingUser || !this.isUserActive(existingUser)){
+            throw new RpcException('User not found');
+        }
+        if (!user.email && !user.phone){
+            throw new RpcException('Invalid credentials')
+        }
+        if (existingUser.password && !(await this.passwordService.comparePassword(password, existingUser.password))){
+            throw new RpcException('Invalid password')
+        }
+        if (user.email) {
+            const userWithSameEmail = await this.findUserByEmail(user.email);
+            if (
+            userWithSameEmail &&
+            userWithSameEmail.user_id !== existingUser.user_id
+            ) {
+            throw new RpcException('Email already in use');
+            }
+            existingUser.email = user.email;
+        }
+        if (user.phone) {
+            const userWithSamePhone = await this.findUserByPhone(user.phone);
+            if (
+            userWithSamePhone &&
+            userWithSamePhone.user_id !== existingUser.user_id
+            ) {
+            throw new RpcException('Phone already in use');
+            }
+            existingUser.phone = user.phone;
+        }
+        await this.userRepo.save(existingUser);
+        return {message: 'Info has been updated'}
+    }
+
+    async updateUserUsername(userId: number, username: string) {
+        const existingUser = await this.findUserById(userId);
+        if (!existingUser || !this.isUserActive(existingUser)){
+            throw new RpcException('User not found');
+        }
+        if (!existingUser.username){
+            throw new RpcException('Invalid username')
+        }
+        existingUser.username=username;
+        await this.userRepo.save(existingUser);
+        return {message: 'Username has been updated'}
+    }
+
+    async deleteUser(userId: number): Promise<{ recoverUntil: Date }> {
+        const existingUser = await this.findUserById(userId);
+        if (!existingUser || !this.isUserActive(existingUser)) {
+            throw new RpcException('User not found');
+        }
+        existingUser.deletedAt = new Date();
+        await this.userRepo.save(existingUser);
+        const recoverUntil = this.getRecoveryDate(existingUser.deletedAt);
+
+        return { recoverUntil };
+    }
+
+    async recoverAccount(userId: number){
+        const existingUser = await this.userRepo.findUserByIdIncludingDeleted(userId);
+        if (!existingUser) {
+            throw new RpcException('User not found');
+        }
+        if (this.isUserActive(existingUser)) {
+            return;
+        }
+        existingUser.deletedAt = null;
+        await this.userRepo.save(existingUser);
+    }
+
+    @Cron(CronExpression.EVERY_DAY_AT_2AM)
+    async anonymizeUsers() {
+        const users: User[] = await this.userRepo.findAll();
+
+        for (const user of users) {
+            if (user.deletedAt === null) continue;
+            if (user.email === null && user.phone === null && user.password === null) {
+                continue;
+            }
+
+            const recoverUntil = this.getRecoveryDate(user.deletedAt);
+            if (new Date() > recoverUntil) {
+                user.username = 'anonymous';
+                user.email = null;
+                user.phone = null;
+                user.password = null;
+                user.profile_photo_url = null;
+                await this.userRepo.save(user);
+            }
+        }
     }
 
     // helper methods
@@ -76,11 +174,6 @@ export class UsersService {
             throw new RpcException('Email already in use');
         }
     }
-
-        const existingUserByUsername = await this.findUserByUsername(user.username);    
-        if (existingUserByUsername){
-            throw new RpcException('Username already in use');
-        }
         const existingUserByPhone = await this.findUserByPhone(user.phone);    
         if (existingUserByPhone){
             throw new RpcException('Phone already in use');
@@ -113,7 +206,13 @@ export class UsersService {
         return this.userRepo.findByPhone(phone);
     }
 
-    async findUserByUsername(username: string): Promise<User | null> {
-        return this.userRepo.findByUsername(username);
+    isUserActive(user: User): boolean {
+    return user.deletedAt === null;
     }
+
+    getRecoveryDate(deletedAt: Date): Date {
+        const recoveryDays = 30;
+        return new Date(deletedAt.getTime() + recoveryDays * 24 * 60 * 60 * 1000);
+    }
+
 }

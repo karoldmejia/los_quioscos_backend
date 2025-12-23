@@ -4,6 +4,7 @@ import { UsersService } from '../services/users.service';
 import { User } from '../entities/user.entity';
 import { PasswordService } from './password.service';
 import { AuthDto } from '../dtos/auth.dto';
+import { RpcException } from '@nestjs/microservices';
 
 @Injectable()
 export class AuthService{
@@ -20,7 +21,6 @@ export class AuthService{
 
         const checks: Promise<User | null>[] = [];
 
-        if (username) checks.push(this.usersService.findUserByUsername(username));
         if (email) checks.push(this.usersService.findUserByEmail(email));
         if (phone) checks.push(this.usersService.findUserByPhone(phone));
 
@@ -44,6 +44,14 @@ export class AuthService{
     }
 
     async login(user: Omit<User, 'password'>){
+        const maxRecovDate = this.usersService.getRecoveryDate(user.deletedAt);
+        if (user.deletedAt){
+            if (new Date()<=maxRecovDate){
+                await this.usersService.recoverAccount(user.user_id);
+            } else {
+                throw new RpcException('Invalid credentials');
+            }
+        }
         const payload = {sub: user.id, email: user.email, phone: user.phone, username: user.username}
         return {
             access_token: this. jwtService.sign(payload)

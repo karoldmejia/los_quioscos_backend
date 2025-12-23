@@ -5,6 +5,7 @@ import { PasswordService } from '../password.service';
 import { JwtService } from '@nestjs/jwt';
 import { User } from '../../entities/user.entity';
 import { AuthDto } from '../../dtos/auth.dto';
+import { RpcException } from '@nestjs/microservices';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -16,8 +17,10 @@ describe('AuthService', () => {
   beforeEach(async () => {
     usersService = {
       findUserByEmail: jest.fn(),
-      findUserByUsername: jest.fn(),
       findUserByPhone: jest.fn(),
+      recoverAccount: jest.fn(),
+      getRecoveryDate: jest.fn(),
+      createOAuthUser: jest.fn(),
     };
 
     passwordService = {
@@ -41,110 +44,162 @@ describe('AuthService', () => {
     jest.clearAllMocks();
   });
 
-  it('should be defined', () => {
-    expect(service).toBeDefined();
-  });
+  // validateUser
 
-    describe('validateUser', () => {
+  describe('validateUser', () => {
     const mockUser: User = {
-        id: 1,
+      user_id: 1,
+      email: 'test@example.com',
+      username: 'testuser',
+      phone: '1234567890',
+      password: 'hashedpassword',
+      deletedAt: null,
+    } as User;
+
+    it('should return user without password if credentials are valid', async () => {
+      usersService.findUserByEmail.mockResolvedValue(mockUser);
+      passwordService.comparePassword.mockResolvedValue(true);
+
+      const dto: AuthDto = {
         email: 'test@example.com',
-        username: 'testuser',
-        phone: '1234567890',
-        password: 'hashedpassword',
-    } as unknown as User;
+        password: '1234',
+      };
 
-    it('should return user without password if valid', async () => {
-        usersService.findUserByEmail.mockResolvedValue(mockUser);
-        passwordService.comparePassword.mockResolvedValue(true);
+      const result = await service.validateUser(dto);
 
-        const dto: AuthDto = { email: 'test@example.com', password: '1234', username: undefined };
-        const result = await service.validateUser(dto);
-
-        expect(result).toEqual({
-        id: mockUser.id,
+      expect(result).toEqual({
+        user_id: mockUser.user_id,
         email: mockUser.email,
         username: mockUser.username,
         phone: mockUser.phone,
-        });
+        deletedAt: null,
+      });
     });
 
-    it('should return null if user not found', async () => {
-        usersService.findUserByEmail.mockResolvedValue(null);
+    it('should return null if user is not found', async () => {
+      usersService.findUserByEmail.mockResolvedValue(null);
 
-        const dto: AuthDto = { email: 'noone@example.com', password: '1234', username: undefined };
-        const result = await service.validateUser(dto);
+      const dto: AuthDto = { email: 'noone@mail.com', password: '1234' };
+      const result = await service.validateUser(dto);
 
-        expect(result).toBeNull();
+      expect(result).toBeNull();
     });
 
     it('should return null if password is invalid', async () => {
-        usersService.findUserByEmail.mockResolvedValue(mockUser);
-        passwordService.comparePassword.mockResolvedValue(false);
+      usersService.findUserByEmail.mockResolvedValue(mockUser);
+      passwordService.comparePassword.mockResolvedValue(false);
 
-        const dto: AuthDto = { email: 'test@example.com', password: 'wrong', username: undefined };
-        const result = await service.validateUser(dto);
+      const dto: AuthDto = { email: 'test@example.com', password: 'wrong' };
+      const result = await service.validateUser(dto);
 
-        expect(result).toBeNull();
+      expect(result).toBeNull();
     });
-    });
+  });
 
+  // login
 
-    describe('login', () => {
-    it('should return JWT access token', async () => {
-        const mockUser: User = {
-            id: 1,
-            email: 'test@example.com',
-            username: 'testuser',
-            phone: '1234567890',
-            password: 'hashedpassword',
-        } as unknown as User;
+  describe('login', () => {
+    it('should login active user and return JWT', async () => {
+      const user = {
+        user_id: 1,
+        email: 'test@mail.com',
+        username: 'test',
+        phone: '123',
+        deletedAt: null,
+      } as Omit<User, 'password'>;
 
-        jwtService.sign.mockReturnValue('mocked.jwt.token');
+      jwtService.sign.mockReturnValue('jwt.token');
 
-        const result = await service.login(mockUser);
-        expect(result).toEqual({ access_token: 'mocked.jwt.token' });
-    });
-    });
+      const result = await service.login(user);
 
-    describe('validatePassword', () => {
-    it('should call PasswordService.comparePassword', async () => {
-        passwordService.comparePassword.mockResolvedValue(true);
-
-        const result = await service.validatePassword('hashed', 'plain');
-        expect(result).toBe(true);
-        expect(passwordService.comparePassword).toHaveBeenCalledWith('plain', 'hashed');
-    });
+      expect(jwtService.sign).toHaveBeenCalledWith({
+        sub: user.user_id,
+        email: user.email,
+        phone: user.phone,
+        username: user.username,
+      });
+      expect(result).toEqual({ access_token: 'jwt.token' });
     });
 
-    describe('validateOAuthUser', () => {
-    it('should create or return existing user and return JWT', async () => {
-        const googleUser = { email: 'oauth@example.com' };
-        const mockUser: Omit<User, 'password'> = {
-        id: 2,
-        email: 'oauth@example.com',
+    it('should recover account automatically if within recovery period', async () => {
+      const deletedAt = new Date();
+      const recoverUntil = new Date(Date.now() + 1000 * 60 * 60);
+
+      const user = {
+        user_id: 1,
+        email: 'test@mail.com',
+        username: 'test',
+        phone: '123',
+        deletedAt,
+      } as Omit<User, 'password'>;
+
+      usersService.getRecoveryDate.mockReturnValue(recoverUntil);
+      jwtService.sign.mockReturnValue('jwt.token');
+
+      const result = await service.login(user);
+
+      expect(usersService.recoverAccount).toHaveBeenCalledWith(user.user_id);
+      expect(result).toEqual({ access_token: 'jwt.token' });
+    });
+
+    it('should throw Invalid credentials if recovery period expired', async () => {
+      const deletedAt = new Date();
+      const recoverUntil = new Date(Date.now() - 1000);
+
+      const user = {
+        user_id: 1,
+        email: 'test@mail.com',
+        username: 'test',
+        phone: '123',
+        deletedAt,
+      } as Omit<User, 'password'>;
+
+      usersService.getRecoveryDate.mockReturnValue(recoverUntil);
+
+      await expect(service.login(user)).rejects.toThrow(RpcException);
+    });
+  });
+
+  // validateOAuthUser
+
+  describe('validateOAuthUser', () => {
+    it('should create oauth user and login', async () => {
+      const googleUser = { email: 'oauth@mail.com' };
+
+      const mockUser = {
+        user_id: 2,
+        email: 'oauth@mail.com',
         username: 'oauth',
         phone: null,
-        } as unknown as Omit<User, 'password'>;
+        deletedAt: null,
+      } as Omit<User, 'password'>;
 
-        usersService.createOAuthUser = jest.fn().mockResolvedValue(mockUser);
-        jwtService.sign = jest.fn().mockReturnValue('mocked.jwt.oauth.token');
+      usersService.createOAuthUser.mockResolvedValue(mockUser);
+      jwtService.sign.mockReturnValue('oauth.jwt');
 
-        const result = await service.validateOAuthUser(googleUser);
+      const result = await service.validateOAuthUser(googleUser);
 
-        expect(usersService.createOAuthUser).toHaveBeenCalledWith({
+      expect(usersService.createOAuthUser).toHaveBeenCalledWith({
         email: googleUser.email,
-        username: googleUser.email.split('@')[0],
-        });
-        expect(jwtService.sign).toHaveBeenCalledWith({
-        sub: mockUser.id,
-        email: mockUser.email,
-        phone: mockUser.phone,
-        username: mockUser.username,
-        });
-        expect(result).toEqual({ access_token: 'mocked.jwt.oauth.token' });
+        username: 'oauth',
+      });
+      expect(result).toEqual({ access_token: 'oauth.jwt' });
     });
+  });
+
+  // validatePassword
+
+  describe('validatePassword', () => {
+    it('should delegate to PasswordService.comparePassword', async () => {
+      passwordService.comparePassword.mockResolvedValue(true);
+
+      const result = await service.validatePassword('hashed', 'plain');
+
+      expect(passwordService.comparePassword).toHaveBeenCalledWith(
+        'plain',
+        'hashed',
+      );
+      expect(result).toBe(true);
     });
-
-
+  });
 });
