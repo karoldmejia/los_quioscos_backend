@@ -9,13 +9,19 @@ import { PhoneVerificationService } from '../services/phoneverification.service'
 import { PasswordService } from '../services/password.service';
 import { RedisModule } from './redis.module';
 import { Role } from '../entities/role.entity';
-import { UserRole } from '../entities/user_role.entity';
 import { RolePermission } from '../entities/role_permission.entity';
 import { Permission } from '../entities/permission.entity';
+import { RoleRepository } from '../repositories/impl/roles.repository';
+import { PermissionRepository } from '../repositories/impl/permissions.repository';
+import { PermissionService } from '../services/permissions.service';
+import { RolesService } from '../services/roles.service';
+import { RolePermissionRepository } from '../repositories/impl/rolepermission.repository';
+import { RolesController } from '../controllers/roles.controller';
+import { PermissionController } from '../controllers/permissions.controller';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, Role, UserRole, RolePermission, Permission]),
+    TypeOrmModule.forFeature([User, Permission, Role, RolePermission]),
     RedisModule
   ],
   providers: [UsersService,
@@ -23,8 +29,13 @@ import { Permission } from '../entities/permission.entity';
         TwilioService,
         PhoneVerificationService,
         PasswordService,
+        RoleRepository,
+        PermissionRepository,
+        RolePermissionRepository,
+        PermissionService,
+        RolesService
   ],
-  controllers: [UsersController],
-  exports: [UsersService, PasswordService],
+  controllers: [UsersController, RolesController, PermissionController],
+  exports: [UsersService, PasswordService, PermissionService, RolesService],
 })
 export class UsersModule {}

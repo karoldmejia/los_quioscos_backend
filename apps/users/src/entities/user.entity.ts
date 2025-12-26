@@ -1,5 +1,5 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
-import { UserRole } from './user_role.entity';
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany, ManyToOne, JoinColumn } from 'typeorm';
+import { Role } from './role.entity';
 
 @Entity()
 export class User {
@@ -22,8 +22,12 @@ export class User {
   @Column({ type: 'varchar', nullable: true })
   profile_photo_url: string | null;
 
-  @OneToMany(() => UserRole, ur => ur.user)
-  user_roles: UserRole[];
+  @ManyToOne(() => Role, { onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'role_id' })
+  role: Role | null;
+
+  @Column({ nullable: true })
+  role_id: number | null;
 
   @Column({type: 'timestamp', nullable: true, default: null})
   deletedAt: Date | null;

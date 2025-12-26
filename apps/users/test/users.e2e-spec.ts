@@ -8,11 +8,6 @@ import { PhoneVerificationService } from '../src/services/phoneverification.serv
 
 dotenv.config({ path: '.env' });
 
-describe('Users Microservice (TCP) - e2e', () => {
-  let app: INestMicroservice;
-  let client: ClientProxy;
-  let dataSource: DataSource;
-
   const validUser = {
     email: 'test@mail.com',
     password: 'Password1!',
@@ -20,6 +15,11 @@ describe('Users Microservice (TCP) - e2e', () => {
     otp: '123456',
     username: 'testuser'
   };
+
+describe('Users Microservice (TCP) - e2e', () => {
+  let app: INestMicroservice;
+  let client: ClientProxy;
+  let dataSource: DataSource;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
