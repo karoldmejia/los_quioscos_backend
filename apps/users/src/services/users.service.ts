@@ -8,13 +8,15 @@ import { PhoneVerificationService } from './phoneverification.service';
 import { RpcException } from '@nestjs/microservices';
 import { UpdateUserDto } from '../dtos/update-user.dto';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { RolesService } from './roles.service';
 
 @Injectable()
 export class UsersService {
 
     constructor(private readonly userRepo: UserRepository,
         private readonly passwordService: PasswordService,
-        private readonly phoneVerificationService: PhoneVerificationService
+        private readonly phoneVerificationService: PhoneVerificationService,
+        private readonly roleService: RolesService,
     ) {}
 
     async createUser(dto: UserDto): Promise<User> {
@@ -36,6 +38,33 @@ export class UsersService {
         user.username = username;
 
         return this.userRepo.save(user)
+    }
+
+    async addRoleToUser(userId: number, roleId: number): Promise<boolean>{
+        const user = await this.findUserById(userId);
+        if (!user || !this.isUserActive(user)){
+            throw new RpcException('User not found')
+        }
+        const role = await this.roleService.getRole(roleId);
+        if (!role){
+            throw new RpcException('Role not found')
+        }
+        user.role = role;
+        await this.userRepo.save(user)
+        return true
+    }
+
+    async deleteUserRole(userId: number): Promise<boolean>{
+        const user = await this.findUserById(userId);
+        if (!user || !this.isUserActive(user)){
+            throw new RpcException('User not found')
+        }
+        if (!user.role){
+            throw new RpcException('Users role not found')
+        }
+        user.role = null;
+        await this.userRepo.save(user)
+        return true
     }
 
     async resetPassword(userId: number, newPassword: string, duplicatedNewPassword: string, otp: string) {

@@ -52,7 +52,7 @@ export class AuthService{
                 throw new RpcException('Invalid credentials');
             }
         }
-        const payload = {sub: user.id, email: user.email, phone: user.phone, username: user.username}
+        const payload = {sub: user.user_id, email: user.email, phone: user.phone, username: user.username}
         return {
             access_token: this. jwtService.sign(payload)
         }

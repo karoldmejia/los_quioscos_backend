@@ -30,6 +30,18 @@ export class UsersController {
     return userWithoutPassword;
   }
 
+  @MessagePattern({cmd: 'add_role_to_user'})
+  async addRoleToUser(@Payload() payload: {userId: number; roleId: number;}) { 
+      const { userId, roleId } = payload;
+      return await this.usersService.addRoleToUser(userId, roleId)
+  }
+
+  @MessagePattern({ cmd: 'delete_user_role' })
+  async deleteUserRole(@Payload() userId: number) {
+    return await this.usersService.deleteUserRole(userId);
+  }
+
+
   @MessagePattern({cmd: 'reset_password'})
   async resetPassword(@Payload() payload: {userId: number; newPassword: string; duplicatedNewPassword: string; otp: string;}) { 
       const { userId, newPassword, duplicatedNewPassword, otp } = payload;

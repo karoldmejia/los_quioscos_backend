@@ -85,24 +85,142 @@ describe('Users Microservice (TCP) - e2e', () => {
 
 
   it('register_user - should fail if required field is missing', async () => {
-    const invalidUser = { ...validUser } as any;
-    delete invalidUser.password;
+      const invalidUser = { ...validUser } as any;
+      delete invalidUser.password;
+
+      try {
+        await client.send({ cmd: 'register_user' }, invalidUser).toPromise();
+        fail('Expected register_user to throw an error');
+      } catch (err: any) {
+        expect(err.message).toContain('password is required');
+      }
+    });
+
+    it('request_otp - should send otp successfully', async () => {
+    const response = await client
+      .send({ cmd: 'request_otp' }, '+573001234567')
+      .toPromise();
+
+    expect(response).toEqual({ message: 'OTP sent' });
+  });
+
+  it('add_role_to_user - should assign role to user successfully', async () => {
+    const user = await client
+      .send({ cmd: 'register_user' }, validUser)
+      .toPromise();
+
+    const role = await client
+      .send(
+        { cmd: 'create_role' },
+        { name: 'admin', description: 'Admin role' }
+      )
+      .toPromise();
+
+    const response = await client
+      .send(
+        { cmd: 'add_role_to_user' },
+        { userId: user.user_id, roleId: role.id }
+      )
+      .toPromise();
+
+    expect(response).toEqual(true);
+  });
+
+  it('add_role_to_user - should fail if user does not exist', async () => {
+    const role = await client
+      .send(
+        { cmd: 'create_role' },
+        { name: 'admin', description: 'Admin role' }
+      )
+      .toPromise();
 
     try {
-      await client.send({ cmd: 'register_user' }, invalidUser).toPromise();
-      fail('Expected register_user to throw an error');
+      await client
+        .send(
+          { cmd: 'add_role_to_user' },
+          { userId: 999, roleId: role.id }
+        )
+        .toPromise();
+
+      fail('Expected add_role_to_user to throw');
     } catch (err: any) {
-      expect(err.message).toContain('password is required');
+      expect(err.message).toContain('User not found');
     }
   });
 
-  it('request_otp - should send otp successfully', async () => {
-  const response = await client
-    .send({ cmd: 'request_otp' }, '+573001234567')
-    .toPromise();
+  it('add_role_to_user - should fail if role does not exist', async () => {
+    const user = await client
+      .send({ cmd: 'register_user' }, validUser)
+      .toPromise();
 
-  expect(response).toEqual({ message: 'OTP sent' });
-});
+    try {
+      await client
+        .send(
+          { cmd: 'add_role_to_user' },
+          { userId: user.user_id, roleId: 999 }
+        )
+        .toPromise();
+
+      fail('Expected add_role_to_user to throw');
+    } catch (err: any) {
+      expect(err.message).toContain('Role not found');
+    }
+  });
+
+  it('delete_user_role - should remove user role successfully', async () => {
+    const user = await client
+      .send({ cmd: 'register_user' }, validUser)
+      .toPromise();
+
+    const role = await client
+      .send(
+        { cmd: 'create_role' },
+        { name: 'admin', description: 'Admin role' }
+      )
+      .toPromise();
+
+    await client
+      .send(
+        { cmd: 'add_role_to_user' },
+        { userId: user.user_id, roleId: role.id }
+      )
+      .toPromise();
+
+    const response = await client
+      .send({ cmd: 'delete_user_role' }, user.user_id)
+      .toPromise();
+
+    expect(response).toEqual(true);
+  });
+
+  it('delete_user_role - should fail if user does not exist', async () => {
+    try {
+      await client
+        .send({ cmd: 'delete_user_role' }, 999)
+        .toPromise();
+
+      fail('Expected delete_user_role to throw');
+    } catch (err: any) {
+      expect(err.message).toContain('User not found');
+    }
+  });
+
+  it('delete_user_role - should fail if user has no role', async () => {
+    const user = await client
+      .send({ cmd: 'register_user' }, validUser)
+      .toPromise();
+
+    try {
+      await client
+        .send({ cmd: 'delete_user_role' }, user.user_id)
+        .toPromise();
+
+      fail('Expected delete_user_role to throw');
+    } catch (err: any) {
+      expect(err.message).toContain('Users role not found');
+    }
+  });
+
 
   it('reset_password - should reset password successfully', async () => {
     const user = await client

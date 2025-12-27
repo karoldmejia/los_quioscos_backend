@@ -25,10 +25,7 @@ export class User {
   @ManyToOne(() => Role, { onDelete: 'SET NULL' })
   @JoinColumn({ name: 'role_id' })
   role: Role | null;
-
-  @Column({ nullable: true })
-  role_id: number | null;
-
+  
   @Column({type: 'timestamp', nullable: true, default: null})
   deletedAt: Date | null;
 

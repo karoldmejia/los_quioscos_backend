@@ -23,11 +23,13 @@ export class UserRepository extends IUserRepository {
   async findByPhone(phone: string): Promise<User | null> {
       return this.repo.findOne({
           where: { phone, deletedAt: IsNull() },
+          relations: ['role'],
       });
   }
   async findByUser_Id(user_id: number): Promise<User | null> {
       return this.repo.findOne({
           where: { user_id, deletedAt: IsNull() },
+          relations: ['role'],
       });  
     }
 
