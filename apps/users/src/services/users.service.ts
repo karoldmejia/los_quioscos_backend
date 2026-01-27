@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, OnModuleInit, Inject } from '@nestjs/common';
 import { UserDto } from '../dtos/users.dto';
 import { User } from '../entities/user.entity';
 import { UserMapper } from '../mappers/users.mappers';
@@ -9,15 +9,28 @@ import { RpcException } from '@nestjs/microservices';
 import { UpdateUserDto } from '../dtos/update-user.dto';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { RolesService } from './roles.service';
+import type { ClientGrpc } from '@nestjs/microservices';
+import { DocumentServiceGrpc } from '../grpc/documents.interface';
+import { lastValueFrom } from 'rxjs';
+
 
 @Injectable()
-export class UsersService {
+export class UsersService implements OnModuleInit {
 
-    constructor(private readonly userRepo: UserRepository,
+    private documentsService: DocumentServiceGrpc;
+
+    constructor(
+        private readonly userRepo: UserRepository,
         private readonly passwordService: PasswordService,
         private readonly phoneVerificationService: PhoneVerificationService,
         private readonly roleService: RolesService,
+        @Inject('DOCUMENTS_GRPC') private readonly client: ClientGrpc,
     ) {}
+
+    onModuleInit() {
+        this.documentsService =
+        this.client.getService<DocumentServiceGrpc>('DocumentService');
+    }
 
     async createUser(dto: UserDto): Promise<User> {
         await this.validateUser(dto);
@@ -186,6 +199,20 @@ export class UsersService {
             }
         }
     }
+
+    // validate document (integration with documents service)
+    async validateDocument(userId: string, docTypeId: string, files: Buffer[], selfie?: Buffer) {
+    
+        const request: any = {user_id: userId, doc_type_id: docTypeId, files};
+        if (selfie) {
+            request.selfie = selfie;
+        }
+
+        const response = await lastValueFrom(this.documentsService.ValidateDocument(request));
+
+        return response;
+    }
+
 
     // helper methods
 

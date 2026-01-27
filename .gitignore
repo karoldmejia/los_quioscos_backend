@@ -1,7 +1,28 @@
 # compiled output
-/dist
-/node_modules
-/build
+node_modules/
+dist/
+build/
+__pycache__/
+*.pyc
+venv/
+
+# Node / Nest
+npm-cache/
+.eslintcache
+.yarn/
+.pnpm-store/
+
+# Python
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Docker
+*.pid
+docker-data/
 
 # Logs
 logs
@@ -54,3 +75,7 @@ pids
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Document fixtures (do not commit)
+apps/documents/src/layouts/fixtures/
+apps/documents/test/fixtures/

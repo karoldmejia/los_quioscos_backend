@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package documents;
+
+message DocumentValidationRequest {
+  string user_id = 1;
+  string doc_type_id = 2;
+  repeated bytes files = 3;
+  optional bytes selfie = 4;
+}
+
+message DocumentValidationResponse {
+  bool is_valid = 1;
+  string error_code = 2;
+  string error_message = 3;
+}
+
+service DocumentService {
+  rpc ValidateDocument (DocumentValidationRequest)
+      returns (DocumentValidationResponse);
+}

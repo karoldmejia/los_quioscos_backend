@@ -1,0 +1,121 @@
+{
+  "document_type": "licencia_conduccion",
+  "document_id": 3,
+  "version": "v1",
+  "templates": [
+    {
+      "side": "front",
+      "template": {
+        "escudo": {
+          "x1": 0.01,
+          "y1": 0.0,
+          "x2": 0.22,
+          "y2": 0.35,
+          "width": 0.21,
+          "height": 0.35
+        },
+        "photo_face": {
+          "x1": 0.69,
+          "y1": 0.27,
+          "x2": 0.94,
+          "y2": 0.84,
+          "width": 0.25,
+          "height": 0.57
+        },
+        "titulo": {
+          "x1": 0.17,
+          "y1": 0.0,
+          "x2": 0.82,
+          "y2": 0.21,
+          "width": 0.66,
+          "height": 0.21
+        },
+        "num_licencia": {
+          "x1": 0.21,
+          "y1": 0.13,
+          "x2": 0.78,
+          "y2": 0.37,
+          "width": 0.57,
+          "height": 0.25
+        },
+        "nombre": {
+          "x1": 0.4,
+          "y1": 0.46,
+          "x2": 0.6,
+          "y2": 0.63,
+          "width": 0.2,
+          "height": 0.17
+        },
+        "num_documento": {
+          "x1": 0.02,
+          "y1": 0.23,
+          "x2": 0.94,
+          "y2": 0.84,
+          "width": 0.91,
+          "height": 0.62
+        },
+        "fecha_nacimiento": {
+          "x1": 0.02,
+          "y1": 0.46,
+          "x2": 0.3,
+          "y2": 0.63,
+          "width": 0.28,
+          "height": 0.17
+        },
+        "fecha_expedicion": {
+          "x1": 0.02,
+          "y1": 0.58,
+          "x2": 0.3,
+          "y2": 0.75,
+          "width": 0.28,
+          "height": 0.18
+        },
+        "restricciones": {
+          "x1": 0.02,
+          "y1": 0.7,
+          "x2": 0.63,
+          "y2": 0.87,
+          "width": 0.61,
+          "height": 0.17
+        },
+        "organismo_expedidor": {
+          "x1": 0.02,
+          "y1": 0.81,
+          "x2": 0.43,
+          "y2": 0.99,
+          "width": 0.4,
+          "height": 0.18
+        }
+      }
+    },
+    {
+      "side": "back",
+      "template": {
+        "huella": {
+          "x1": 0.71,
+          "y1": 0.04,
+          "x2": 0.99,
+          "y2": 0.56,
+          "width": 0.28,
+          "height": 0.53
+        },
+        "codigo": {
+          "x1": 0.13,
+          "y1": 0.58,
+          "x2": 0.84,
+          "y2": 0.95,
+          "width": 0.71,
+          "height": 0.37
+        },
+        "texto": {
+          "x1": 0.17,
+          "y1": 0.86,
+          "x2": 1.0,
+          "y2": 1.0,
+          "width": 0.83,
+          "height": 0.14
+        }
+      }
+    }
+  ]
+}

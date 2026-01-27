@@ -1,0 +1,13 @@
+pymongo
+kafka-python
+pillow
+pdf2image
+pytesseract
+pypdf2
+opencv-python
+grpcio
+grpcio-tools
+protobuf
+pytest
+insightface
+onnxruntime
