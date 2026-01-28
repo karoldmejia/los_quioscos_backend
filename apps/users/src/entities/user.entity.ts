@@ -1,5 +1,6 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany, ManyToOne, JoinColumn, OneToOne } from 'typeorm';
 import { Role } from './role.entity';
+import { KioskProfile } from './kiosk_profile.entity';
 
 @Entity()
 export class User {
@@ -28,5 +29,10 @@ export class User {
   
   @Column({type: 'timestamp', nullable: true, default: null})
   deletedAt: Date | null;
+
+  @OneToOne(() => KioskProfile, (profile) => profile.user, {cascade: true,onDelete: 'CASCADE'})
+  @JoinColumn({ name: 'userId' })
+  kioskProfile: KioskProfile;
+
 
 }

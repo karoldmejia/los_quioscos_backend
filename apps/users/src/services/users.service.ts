@@ -9,28 +9,20 @@ import { RpcException } from '@nestjs/microservices';
 import { UpdateUserDto } from '../dtos/update-user.dto';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { RolesService } from './roles.service';
-import type { ClientGrpc } from '@nestjs/microservices';
-import { DocumentServiceGrpc } from '../grpc/documents.interface';
-import { lastValueFrom } from 'rxjs';
+import { KioskProfileDto } from '../dtos/kioskprofile.dto';
+import { KioskProfileService } from './kioskprofile.service';
 
 
 @Injectable()
-export class UsersService implements OnModuleInit {
-
-    private documentsService: DocumentServiceGrpc;
+export class UsersService {
 
     constructor(
         private readonly userRepo: UserRepository,
         private readonly passwordService: PasswordService,
         private readonly phoneVerificationService: PhoneVerificationService,
         private readonly roleService: RolesService,
-        @Inject('DOCUMENTS_GRPC') private readonly client: ClientGrpc,
+        private readonly kioskProfileService: KioskProfileService,
     ) {}
-
-    onModuleInit() {
-        this.documentsService =
-        this.client.getService<DocumentServiceGrpc>('DocumentService');
-    }
 
     async createUser(dto: UserDto): Promise<User> {
         await this.validateUser(dto);
@@ -53,18 +45,35 @@ export class UsersService implements OnModuleInit {
         return this.userRepo.save(user)
     }
 
-    async addRoleToUser(userId: number, roleId: number): Promise<boolean>{
+    async addRoleToUser(userId: number, roleId: number): Promise<boolean> {
         const user = await this.findUserById(userId);
-        if (!user || !this.isUserActive(user)){
-            throw new RpcException('User not found')
+        if (!user || !this.isUserActive(user)) {
+            throw new RpcException('User not found');
         }
+
         const role = await this.roleService.getRole(roleId);
-        if (!role){
-            throw new RpcException('Role not found')
+        if (!role) {
+            throw new RpcException('Role not found');
         }
+
+        // assign rol
         user.role = role;
-        await this.userRepo.save(user)
-        return true
+        await this.userRepo.save(user);
+
+        // create profile
+        switch (role.name) {
+            case 'SELLER':
+                const dto: KioskProfileDto = {
+                    userId: user.id,
+                    fullLegalName: '', 
+                    idNumber: '',
+                    kioskName: '',
+                };
+                await this.kioskProfileService.create(dto);
+                break;
+            }
+
+        return true;
     }
 
     async deleteUserRole(userId: number): Promise<boolean>{
@@ -199,20 +208,6 @@ export class UsersService implements OnModuleInit {
             }
         }
     }
-
-    // validate document (integration with documents service)
-    async validateDocument(userId: string, docTypeId: string, files: Buffer[], selfie?: Buffer) {
-    
-        const request: any = {user_id: userId, doc_type_id: docTypeId, files};
-        if (selfie) {
-            request.selfie = selfie;
-        }
-
-        const response = await lastValueFrom(this.documentsService.ValidateDocument(request));
-
-        return response;
-    }
-
 
     // helper methods
 

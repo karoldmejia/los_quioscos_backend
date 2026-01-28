@@ -6,6 +6,7 @@ COPY package*.json ./
 RUN npm install
 
 COPY . .
+COPY contracts /app/contracts
 
 EXPOSE 3000
 CMD ["npm", "run", "start:dev", "--", "apps/users"]

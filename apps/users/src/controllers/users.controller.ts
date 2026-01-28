@@ -70,10 +70,4 @@ export class UsersController {
     return await this.usersService.recoverAccount(userId)
   }
 
-  @MessagePattern({ cmd: 'validate_document' })
-  async validateDocument(@Payload() payload: { userId: string; docTypeId: string; files: Buffer[]; }, ) {
-    const { userId, docTypeId, files } = payload;
-
-    return await this.usersService.validateDocument( userId, docTypeId, files, );
-  }
 }

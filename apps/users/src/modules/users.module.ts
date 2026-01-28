@@ -20,6 +20,11 @@ import { RolesService } from '../services/roles.service';
 import { RolePermissionRepository } from '../repositories/impl/rolepermission.repository';
 import { RolesController } from '../controllers/roles.controller';
 import { PermissionController } from '../controllers/permissions.controller';
+import { KioskProfileController } from '../controllers/kioskprofile.controller';
+import { KioskProfileService } from '../services/kioskprofile.service';
+import { KioskProfileRepository } from '../repositories/impl/kioskprofile.repository';
+import { KioskProfile } from '../entities/kiosk_profile.entity';
+import { DocumentsValidationService } from '../services/documents-validation.service';
 
 @Module({
   imports: [
@@ -30,14 +35,11 @@ import { PermissionController } from '../controllers/permissions.controller';
         options: {
           url: 'documents:50051',
           package: 'documents',
-          protoPath: join(
-            __dirname,
-            'contracts/documents.proto',
-          ),
+          protoPath: join(process.cwd(), 'contracts/documents.proto'),
         },
       },
     ]),
-    TypeOrmModule.forFeature([User, Permission, Role, RolePermission]),
+    TypeOrmModule.forFeature([User, Permission, Role, RolePermission, KioskProfile]),
     RedisModule
   ],
   providers: [UsersService,
@@ -49,9 +51,12 @@ import { PermissionController } from '../controllers/permissions.controller';
         PermissionRepository,
         RolePermissionRepository,
         PermissionService,
-        RolesService
+        RolesService, 
+        KioskProfileService,
+        KioskProfileRepository,
+        DocumentsValidationService
   ],
-  controllers: [UsersController, RolesController, PermissionController],
-  exports: [UsersService, PasswordService, PermissionService, RolesService],
+  controllers: [UsersController, RolesController, PermissionController, KioskProfileController],
+  exports: [UsersService, PasswordService, PermissionService, RolesService, KioskProfileService, DocumentsValidationService],
 })
 export class UsersModule {}
