@@ -4,12 +4,10 @@
   "monorepo": true,
   "root": "apps/api-gateway",
   "sourceRoot": "apps/api-gateway/src",
-
   "compilerOptions": {
     "deleteOutDir": true,
     "webpack": true
   },
-
   "projects": {
     "api-gateway": {
       "type": "application",
@@ -20,17 +18,15 @@
         "tsConfigPath": "apps/api-gateway/tsconfig.app.json"
       }
     },
-
-    "users": {
+    "commerce": {
       "type": "application",
-      "root": "apps/users",
+      "root": "apps/commerce",
       "entryFile": "main",
-      "sourceRoot": "apps/users/src",
+      "sourceRoot": "apps/commerce/src",
       "compilerOptions": {
-        "tsConfigPath": "apps/users/tsconfig.app.json"
+        "tsConfigPath": "apps/commerce/tsconfig.app.json"
       }
     },
-
     "documents": {
       "type": "application",
       "root": "apps/documents",
@@ -38,6 +34,15 @@
       "sourceRoot": "apps/documents/src",
       "compilerOptions": {
         "tsConfigPath": "apps/documents/tsconfig.app.json"
+      }
+    },
+    "users": {
+      "type": "application",
+      "root": "apps/users",
+      "entryFile": "main",
+      "sourceRoot": "apps/users/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/users/tsconfig.app.json"
       }
     }
   }

@@ -27,6 +27,22 @@ services:
       - insightface_models:/root/.insightface/models 
     working_dir: /app
 
+  commerce:
+    build:
+      context: ./apps/commerce
+      dockerfile: Dockerfile
+    container_name: commerce
+    ports:
+      - "3003:3000"
+    env_file:
+      - .env
+    volumes:
+      - ./apps/commerce:/app
+      - /app/node_modules
+      - ./contracts:/app/contracts
+    working_dir: /app
+    command: npm run start:dev
+
   mongodb:
     image: mongo:6
     container_name: mongodb

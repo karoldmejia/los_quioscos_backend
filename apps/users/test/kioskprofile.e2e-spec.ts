@@ -5,7 +5,6 @@ import { DataSource } from 'typeorm';
 import { ClientProxy, ClientProxyFactory, Transport } from '@nestjs/microservices';
 import * as dotenv from 'dotenv';
 import { of } from 'rxjs';
-import { v4 as uuidv4 } from 'uuid';
 import { User } from '../src/entities/user.entity';
 
 
