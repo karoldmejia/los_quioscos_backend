@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { ProductRepository } from '../repositories/impl/product.repository';
 import { Product } from '../entities/product.entity';
-import { ProductCategory } from '../entities/product_category.enum';
+import { ProductCategory } from '../enums/product-category.enum';
 import { CreateProductDto } from '../dtos/create-product.dto';
 import { UpdateProductDto } from '../dtos/update-product.dto';
 import { SearchProductDto } from '../dtos/search-product.dto';

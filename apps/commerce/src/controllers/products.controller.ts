@@ -5,7 +5,7 @@ import { Product } from '../entities/product.entity';
 import { CreateProductDto } from '../dtos/create-product.dto';
 import { UpdateProductDto } from '../dtos/update-product.dto';
 import { SearchProductDto } from '../dtos/search-product.dto';
-import { ProductCategory } from '../entities/product_category.enum';
+import { ProductCategory } from '../enums/product-category.enum';
 
 @Controller()
 export class ProductsController {

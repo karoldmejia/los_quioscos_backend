@@ -1,5 +1,5 @@
 import { Product } from "../entities/product.entity";
-import { ProductCategory } from "../entities/product_category.enum";
+import { ProductCategory } from "../enums/product-category.enum";
 
 export abstract class IProductRepository {
 

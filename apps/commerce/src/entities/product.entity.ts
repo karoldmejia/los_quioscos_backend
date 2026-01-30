@@ -1,6 +1,7 @@
-import {Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index, DeleteDateColumn,} from 'typeorm';
-import { ProductCategory } from './product_category.enum';
-import { UnitMeasure } from './unit_measure.enum';
+import {Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index, DeleteDateColumn, OneToMany,} from 'typeorm';
+import { ProductCategory } from '../enums/product-category.enum';
+import { UnitMeasure } from '../enums/unit-measure.enum';
+import { Batch } from './batch.entity';
 
 @Entity('products')
     export class Product {
@@ -46,4 +47,7 @@ import { UnitMeasure } from './unit_measure.enum';
     
     @DeleteDateColumn()
     deletedAt?: Date;
+
+    @OneToMany(() => Batch, (batch) => batch.product, { cascade: true })
+    batches: Batch[];
 }

@@ -4,8 +4,8 @@ import { CommerceModule } from '../src/commerce.module';
 import { DataSource } from 'typeorm';
 import { ClientProxy, ClientProxyFactory, Transport } from '@nestjs/microservices';
 import * as dotenv from 'dotenv';
-import { ProductCategory } from '../src/entities/product_category.enum';
-import { UnitMeasure } from '../src/entities/unit_measure.enum';
+import { ProductCategory } from '../src/enums/product-category.enum';
+import { UnitMeasure } from '../src/enums/unit-measure.enum';
 import { of } from 'rxjs';
 
 dotenv.config({ path: '.env' });

@@ -3,7 +3,8 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, ILike, IsNull } from "typeorm";
 import { IProductRepository } from "../iproduct.repository";
 import { Product } from "../../entities/product.entity";
-import { ProductCategory } from "../../entities/product_category.enum";
+import { ProductCategory } from "../../enums/product-category.enum";
+import { RpcException } from "@nestjs/microservices";
 
 @Injectable()
 export class ProductRepository extends IProductRepository {
@@ -36,7 +37,7 @@ export class ProductRepository extends IProductRepository {
         await this.repo.update(productId, { active: false });
         const product = await this.findById(productId);
         if (!product) {
-            throw new Error(`Product with id ${productId} not found`);
+            throw new RpcException(`Product with id ${productId} not found`);
         }
         return product;
     }
@@ -45,7 +46,7 @@ export class ProductRepository extends IProductRepository {
         await this.repo.update(productId, { active: true });
         const product = await this.findById(productId);
         if (!product) {
-            throw new Error(`Product with id ${productId} not found`);
+            throw new RpcException(`Product with id ${productId} not found`);
         }
         return product;
     }

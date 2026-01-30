@@ -1,6 +1,6 @@
 import { IsEnum, IsNumber, IsString, IsOptional, IsArray, MaxLength, IsPositive, IsDecimal,MinLength, Max } from 'class-validator';
-import { ProductCategory } from '../entities/product_category.enum';
-import { UnitMeasure } from '../entities/unit_measure.enum';
+import { ProductCategory } from '../enums/product-category.enum';
+import { UnitMeasure } from '../enums/unit-measure.enum';
 
 export class CreateProductDto {
     @IsNumber()

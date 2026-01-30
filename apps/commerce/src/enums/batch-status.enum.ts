@@ -1,0 +1,7 @@
+export enum BatchStatus {
+  ACTIVE = 'ACTIVE',
+  EXPIRED = 'EXPIRED',
+  DEPLETED = 'DEPLETED',
+  MANUAL_OUT = 'MANUAL_OUT',
+  DELETED = 'DELETED',
+}
