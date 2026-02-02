@@ -1,6 +1,6 @@
 import { IsArray, IsBoolean, IsInt, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
-import { StockMovement } from '../entities/stockmovement.entity';
+import { StockMovement } from '../entities/stock-movement.entity';
 import { BatchConsumedDto } from './batch-consumed.dto';
 
 export class ConsumeStockFefoResultDto {

@@ -1,6 +1,6 @@
 import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { CreateStockMovementDto } from '../dtos/create-stockmovement.dto';
-import { StockMovement } from '../entities/stockmovement.entity';
+import { StockMovement } from '../entities/stock-movement.entity';
 import { Batch } from '../entities/batch.entity';
 import { BatchService } from './batch.service';
 import { StockMovementRepository } from '../repositories/impl/stockmovement.repository';

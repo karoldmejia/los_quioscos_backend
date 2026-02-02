@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { StockMovement } from '../../entities/stockmovement.entity';
+import { StockMovement } from '../../entities/stock-movement.entity';
 import { Repository, DataSource, Between } from 'typeorm';
 import { IStockMovementRepository } from "../istockmovement.repository";
 import { StockMovementType } from '../../enums/stock-movement-type.enum';

@@ -5,7 +5,7 @@ docker compose up -d postgres redis
 echo "Waiting for microservices..."
 sleep 5
 
-MICROSERVICIOS=("users" "commerce")
+MICROSERVICIOS=("commerce")
 
 for svc in "${MICROSERVICIOS[@]}"
 do

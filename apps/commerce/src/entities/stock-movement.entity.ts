@@ -1,6 +1,6 @@
 
 import {Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, Index, ManyToOne, JoinColumn,} from 'typeorm';
-import { Batch } from '../entities/batch.entity';
+import { Batch } from './batch.entity';
 import { StockMovementType } from '../enums/stock-movement-type.enum';
 
 @Entity('stock_movements')

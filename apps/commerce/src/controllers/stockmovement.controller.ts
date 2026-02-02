@@ -1,7 +1,7 @@
 import { Controller } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { StockMovementService } from '../services/stockmovement.service';
-import { StockMovement } from '../entities/stockmovement.entity';
+import { StockMovement } from '../entities/stock-movement.entity';
 import { CreateStockMovementDto } from '../dtos/create-stockmovement.dto';
 import { Batch } from '../entities/batch.entity';
 import { ConsumeStockFefoResultDto } from '../dtos/consumed-stock.dto';

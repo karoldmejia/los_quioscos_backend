@@ -1,5 +1,5 @@
 import { StockMovementType } from '../enums/stock-movement-type.enum';
-import { StockMovement } from '../entities/stockmovement.entity';
+import { StockMovement } from '../entities/stock-movement.entity';
 
 export interface IStockMovementRepository {
   // basic crud functionalities

@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ProductsModule } from './modules/products.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { OrdersModule } from './modules/orders.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { ScheduleModule } from '@nestjs/schedule';
       synchronize: true,
     }),
     ProductsModule,
+    OrdersModule,
   ],
 })
 export class CommerceModule {}

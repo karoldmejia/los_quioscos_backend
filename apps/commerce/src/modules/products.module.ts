@@ -4,7 +4,7 @@ import { ProductService } from '../services/product.service';
 import { ProductRepository } from '../repositories/impl/product.repository';
 import { Product } from '../entities/product.entity';
 import { ProductsController } from '../controllers/products.controller';
-import { StockMovement } from '../entities/stockmovement.entity';
+import { StockMovement } from '../entities/stock-movement.entity';
 import { Batch } from '../entities/batch.entity';
 import { BatchController } from '../controllers/batch.controller';
 import { StockMovementController } from '../controllers/stockmovement.controller';
