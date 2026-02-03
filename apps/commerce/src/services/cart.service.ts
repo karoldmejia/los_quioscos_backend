@@ -1,4 +1,4 @@
-import { Injectable} from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { CartRepository } from '../repositories/impl/cart.repository';
 import { CartItemRepository } from '../repositories/impl/cart-item.repository';
 import { ProductRepository } from '../repositories/impl/product.repository';
@@ -8,12 +8,13 @@ import { CartItem } from '../entities/cart-item.entity';
 import { Product } from '../entities/product.entity';
 import { CartStatus } from '../enums/cart-status.enum';
 import { RpcException } from '@nestjs/microservices';
+import { Cron, CronExpression } from '@nestjs/schedule';
 
 @Injectable()
 export class CartService {
-
     private readonly INACTIVITY_THRESHOLD_MINUTES = 30;
     private readonly CLEANUP_ABANDONED_AFTER_DAYS = 7;
+    private readonly logger = new Logger(CartService.name);
 
     constructor(
         private readonly cartRepository: CartRepository,
@@ -46,34 +47,26 @@ export class CartService {
     // basic items management
 
     async addItem(userId: string, productId: string, quantity: number): Promise<Cart | null> {
-        // validate quantity
         if (quantity <= 0) {
             throw new RpcException('Quantity must be greater than zero');
         }
 
-        // get or create cart
         const cart = await this.getOrCreateCart(userId);
-
-        // verify product
         const product = await this.validateProduct(productId);
-
-        // validate stock
+        
         const totalStock = await this.getProductCurrentQuantity(productId);
         if (quantity > totalStock) {
             throw new RpcException(`Insufficient stock. Available: ${totalStock}, Solicited: ${quantity}`);
         }
 
-        // look if product its already in the cart
         const existingItem = await this.cartItemRepository.findByCartAndProduct(cart.id, productId);
 
         if (existingItem) {
-            // update qty if it already exists
             await this.updateItemQuantity(
                 existingItem.id,
                 existingItem.quantity + quantity
             );
         } else {
-            // create new item
             await this.cartItemRepository.create({
                 cartId: cart.id,
                 productId,
@@ -82,9 +75,7 @@ export class CartService {
             });
         }
 
-        // update activity
         await this.updateCartActivity(cart.id);
-
         return await this.cartRepository.findActiveByUserIdWithItems(userId);
     }
 
@@ -248,8 +239,6 @@ export class CartService {
             throw new RpcException('Cart not found');
         }
 
-        // Note: prices are obtained from the relation in real time
-        // this function its to validate if the products still exist
         for (const item of cart.items) {
             const product = await this.productRepository.findById(item.productId);
 
@@ -271,5 +260,130 @@ export class CartService {
 
     async updateCartStatus(cartId: string, status: CartStatus): Promise<Cart> {
         return await this.cartRepository.updateStatus(cartId, status);
+    }
+
+    // cron jobs
+
+    private async syncPricesForAllCarts(): Promise<void> {
+        try {
+            const activeCarts = await this.cartRepository.findByStatus(CartStatus.ACTIVE);
+            
+            let syncedCount = 0;
+            let removedItemsCount = 0;
+
+            for (const cart of activeCarts) {
+                try {
+                    const cartWithItems = await this.cartRepository.findByIdWithItems(cart.id);
+                    if (!cartWithItems) continue;
+                    
+                    const beforeCount = cartWithItems.items.length;
+                    await this.syncItemPrices(cart.id);
+                    
+                    const updatedCart = await this.cartRepository.findByIdWithItems(cart.id);
+                    if (updatedCart && updatedCart.items.length < beforeCount) {
+                        removedItemsCount += (beforeCount - updatedCart.items.length);
+                    }
+                    
+                    syncedCount++;
+                } catch (error) {
+                    this.logger.warn(`Error synchronizing cart ${cart.id}: ${error.message}`);
+                }
+            }
+
+            this.logger.log(`Synchronized ${syncedCount} carts, deleted ${removedItemsCount} obsolete items`);
+        } catch (error) {
+            this.logger.error('Error on massive prices synchronization:', error);
+            throw error;
+        }
+    }
+
+    private async validateStockForAllCarts(): Promise<void> {
+        try {
+            const activeCarts = await this.cartRepository.findByStatus(CartStatus.ACTIVE);
+            
+            let validCarts = 0;
+            let invalidCarts = 0;
+            const cartsWithProblems: string[] = [];
+
+            for (const cart of activeCarts) {
+                try {
+                    const isValid = await this.validateCartStock(cart.id);
+                    if (!isValid) {
+                        invalidCarts++;
+                        cartsWithProblems.push(cart.id);
+                        this.logger.warn(`Cart ${cart.id} has stock problems`);
+                    } else {
+                        validCarts++;
+                    }
+                } catch (error) {
+                    this.logger.warn(`Error validating stock for cart ${cart.id}: ${error.message}`);
+                }
+            }
+
+            if (invalidCarts > 0) {
+                this.logger.warn(`${invalidCarts} carts have stock problems: ${cartsWithProblems.join(', ')}`);
+            }
+            
+            this.logger.log(`Validated ${activeCarts.length} carts: ${validCarts} valid, ${invalidCarts} with problems`);
+        } catch (error) {
+            this.logger.error('Error on massive stock validation:', error);
+            throw error;
+        }
+    }
+
+    @Cron(CronExpression.EVERY_5_MINUTES)
+    async handleAbandonedCartsCron(): Promise<void> {
+        this.logger.log('Executing cron: Marking abandoned carts');
+        try {
+            const markedCount = await this.markAbandonedCarts();
+            if (markedCount > 0) {
+                this.logger.log(`${markedCount} cars markes as abandoned`);
+            }
+        } catch (error) {
+            this.logger.error('Error on cron for abandoned carts:', error);
+        }
+    }
+
+    @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+    async handleCleanupAbandonedCartsCron(): Promise<void> {
+        this.logger.log('Executing cron: Clean abandones carts');
+        try {
+            const cleanedCount = await this.cleanupOldAbandonedCarts();
+            if (cleanedCount > 0) {
+                this.logger.log(`${cleanedCount} abandoned carts deleted`);
+            }
+        } catch (error) {
+            this.logger.error('Error on cron of carts cleaning:', error);
+        }
+    }
+
+    @Cron(CronExpression.EVERY_2_HOURS)
+    async handleSyncPricesCron(): Promise<void> {
+        this.logger.log('Executing cron: Synchronize prices for all carts');
+        try {
+            await this.syncPricesForAllCarts();
+        } catch (error) {
+            this.logger.error('Error on cron for prices synchronization:', error);
+        }
+    }
+
+    @Cron(CronExpression.EVERY_5_MINUTES)
+    async handleStockValidationCron(): Promise<void> {
+        this.logger.log('Executing cron: Validate stock of all active carts');
+        try {
+            await this.validateStockForAllCarts();
+        } catch (error) {
+            this.logger.error('Error on cron of stock validation:', error);
+        }
+    }
+
+    @Cron(CronExpression.EVERY_HOUR)
+    async handleMaintenanceCron(): Promise<void> {
+        this.logger.log('Executing cron: Complete cart mainteinance');
+        try {
+            await this.performMaintenance();
+        } catch (error) {
+            this.logger.error('Error on cron of mainteinance:', error);
+        }
     }
 }

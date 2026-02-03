@@ -85,6 +85,15 @@ export class CartRepository extends ICartRepository {
         });
     }
 
+    async findByStatus(status: CartStatus): Promise<Cart[]> {
+    return await this.repo.find({
+        where: { 
+            status,
+            deletedAt: IsNull()
+        },
+        order: { lastActivityAt: 'DESC' }
+    });
+}
     async updateStatus(cartId: string, status: CartStatus): Promise<Cart> {
         await this.repo.update(cartId, {
             status,

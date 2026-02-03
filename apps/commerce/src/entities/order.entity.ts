@@ -22,10 +22,10 @@ export class Order {
     @Column({ type: 'int' })
     kioskUserId: number;
 
-    @Column({type: 'enum', enum: OrderStatus, default: OrderStatus.PENDING_KIOSK_CONFIRMATION})
+    @Column({ type: 'enum', enum: OrderStatus, default: OrderStatus.PENDING_KIOSK_CONFIRMATION })
     status: OrderStatus;
 
-    @Column({ type: 'decimal', precision: 12, scale: 2 })
+    @Column({ type: "decimal", precision: 12, scale: 2, default: 0 })
     subtotalProducts: string;
 
     @Column({ type: 'timestamp', nullable: true })

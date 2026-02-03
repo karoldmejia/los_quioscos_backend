@@ -11,7 +11,7 @@ export abstract class IBatchRepository {
   
   // query methods
   abstract findByProductId(productId: string): Promise<Batch[]>;
-  abstract findActiveByProductId(productId: string): Promise<Batch[]>;
+  abstract findActiveByProductId(productId: string, kioskUserId: number): Promise<Batch[]>;
   abstract findBatchesByStatus(status: BatchStatus): Promise<Batch[]>;
   abstract getTotalStockByProduct(productId: string): Promise<number>;
   abstract getBatchHistory(productId?: string, batchId?: string): Promise<Batch[]>;

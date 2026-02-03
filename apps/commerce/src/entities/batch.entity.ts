@@ -36,7 +36,6 @@ export class Batch {
     @Column({ type: 'int', default: 0 })
     reservedQuantity: number;
 
-
     @Column({ type: 'enum', enum: BatchStatus, default: BatchStatus.ACTIVE })
     status: BatchStatus;
 

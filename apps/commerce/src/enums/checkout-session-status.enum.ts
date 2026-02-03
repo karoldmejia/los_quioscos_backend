@@ -3,5 +3,6 @@ export enum CheckoutSessionStatus {
     PROCESSING = 'PROCESSING',
     COMPLETED = 'COMPLETED',
     EXPIRED = 'EXPIRED',
-    FAILED = 'FAILED'
+    FAILED = 'FAILED',
+    CANCELLED = 'CANCELLED'
 }
