@@ -1,0 +1,137 @@
+{
+  "document_type": "cedula_amarilla",
+  "document_type_id": 2,
+  "version": "v1",
+  "templates": [
+    {
+      "side": "front",
+      "template": {
+        "titulo_cedula": {
+          "x1": 0.05,
+          "y1": 0.04,
+          "x2": 0.62,
+          "y2": 0.3,
+          "width": 0.57,
+          "height": 0.27
+        },
+        "photo_face": {
+          "x1": 0.55,
+          "y1": 0.11,
+          "x2": 1.0,
+          "y2": 0.92,
+          "width": 0.45,
+          "height": 0.81
+        },
+        "num_titulo": {
+          "x1": 0.02,
+          "y1": 0.28,
+          "x2": 0.21,
+          "y2": 0.4,
+          "width": 0.19,
+          "height": 0.13
+        },
+        "num_documento": {
+          "x1": 0.14,
+          "y1": 0.25,
+          "x2": 0.5,
+          "y2": 0.4,
+          "width": 0.36,
+          "height": 0.15
+        },
+        "apellidos": {
+          "x1": 0.02,
+          "y1": 0.32,
+          "x2": 0.42,
+          "y2": 0.47,
+          "width": 0.4,
+          "height": 0.15
+        },
+        "titulo_apellidos": {
+          "x1": 0.02,
+          "y1": 0.43,
+          "x2": 0.23,
+          "y2": 0.55,
+          "width": 0.21,
+          "height": 0.13
+        },
+        "nombres": {
+          "x1": 0.02,
+          "y1": 0.48,
+          "x2": 0.24,
+          "y2": 0.62,
+          "width": 0.22,
+          "height": 0.14
+        },
+        "titulo_nombres": {
+          "x1": 0.02,
+          "y1": 0.58,
+          "x2": 0.22,
+          "y2": 0.71,
+          "width": 0.2,
+          "height": 0.13
+        },
+        "firma": {
+          "x1": 0.09,
+          "y1": 0.65,
+          "x2": 0.57,
+          "y2": 0.93,
+          "width": 0.48,
+          "height": 0.28
+        }
+      }
+    },
+    {
+      "side": "back",
+      "template": {
+        "huella": {
+          "x1": 0.0,
+          "y1": 0.04,
+          "x2": 0.34,
+          "y2": 0.57,
+          "width": 0.34,
+          "height": 0.53
+        },
+        "descr_huella": {
+          "x1": 0.02,
+          "y1": 0.51,
+          "x2": 0.26,
+          "y2": 0.63,
+          "width": 0.24,
+          "height": 0.12
+        },
+        "fecha_lugar_nacimiento": {
+          "x1": 0.32,
+          "y1": 0.06,
+          "x2": 0.94,
+          "y2": 0.33,
+          "width": 0.61,
+          "height": 0.28
+        },
+        "datos_personales": {
+          "x1": 0.32,
+          "y1": 0.28,
+          "x2": 1.0,
+          "y2": 0.63,
+          "width": 0.68,
+          "height": 0.35
+        },
+        "codigo": {
+          "x1": 0.02,
+          "y1": 0.59,
+          "x2": 0.97,
+          "y2": 0.93,
+          "width": 0.95,
+          "height": 0.34
+        },
+        "microtexto": {
+          "x1": 0.03,
+          "y1": 0.86,
+          "x2": 0.97,
+          "y2": 0.98,
+          "width": 0.95,
+          "height": 0.12
+        }
+      }
+    }
+  ]
+}

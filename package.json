@@ -1,0 +1,20 @@
+{
+  "name": "los-quioscos-backend",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "start:dev:users": "npm run start:dev -w apps/users",
+    "start:dev:documents": "npm run start:dev -w apps/documents",
+    "start:dev:api-gateway": "npm run start:dev -w apps/api-gateway",
+    "start:dev:commerce": "npm run start:dev -w apps/commerce",
+
+    "test:e2e:users": "npm run test:e2e:users -w apps/users",
+    "test:e2e:documents": "npm run test:e2e:documents -w apps/documents",
+    "test:e2e:api-gateway": "npm run test:e2e:api-gateway -w apps/api-gateway",
+    "test:e2e:commerce": "npm run test:e2e:commerce -w apps/commerce"
+
+  }
+}
