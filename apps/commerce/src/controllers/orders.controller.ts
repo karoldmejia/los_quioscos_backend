@@ -44,13 +44,7 @@ export class OrderController {
   // payment confirmed
 
   @MessagePattern({ cmd: 'mark_order_as_paid' })
-  async markOrderAsPaid(
-    @Payload()
-    payload: {
-      orderId: string;
-      paymentInfo?: any;
-    },
-  ): Promise<Order> {
+  async markOrderAsPaid(@Payload()payload: {orderId: string;paymentInfo?: any;}): Promise<Order> {
     const { orderId, paymentInfo } = payload;
     return await this.orderService.markOrderAsPaid(orderId, paymentInfo);
   }

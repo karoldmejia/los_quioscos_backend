@@ -18,7 +18,6 @@ export abstract class ICheckoutSessionRepository {
     abstract findExpiredSessions(thresholdDate: Date): Promise<CheckoutSession[]>;
     
     // specific search
-    abstract findActiveByUserId(userId: string): Promise<CheckoutSession | null>;
     abstract findPendingByUserId(userId: string): Promise<CheckoutSession[]>;
     abstract findCompletedByUserId(userId: string): Promise<CheckoutSession[]>;
     

@@ -1,22 +1,20 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, LessThan, IsNull, Not, MoreThanOrEqual, In, Between } from 'typeorm';
+import { Repository, DataSource, LessThan, In, Between, MoreThanOrEqual, Not, IsNull } from 'typeorm';
 import { ICheckoutSessionRepository } from '../icheckout-session.repository';
 import { CheckoutSession } from '../../entities/checkout-session.entity';
 import { CheckoutSessionStatus } from '../../enums/checkout-session-status.enum';
 import { Order } from '../../entities/order.entity';
 
 @Injectable()
-export class CheckoutSessionRepository extends ICheckoutSessionRepository {
+export class CheckoutSessionRepository implements ICheckoutSessionRepository {
     constructor(
         @InjectRepository(CheckoutSession)
         private readonly repo: Repository<CheckoutSession>,
         private dataSource: DataSource,
-    ) {
-        super();
-    }
+    ) {}
 
-    // basic crud
+    // BASIC CRUD
 
     async create(sessionData: Partial<CheckoutSession>): Promise<CheckoutSession> {
         const session = this.repo.create(sessionData);
@@ -38,7 +36,7 @@ export class CheckoutSessionRepository extends ICheckoutSessionRepository {
         await this.repo.delete(sessionId);
     }
 
-    // search
+    // SEARCH
 
     async findById(sessionId: string): Promise<CheckoutSession | null> {
         return await this.repo.findOne({
@@ -83,7 +81,7 @@ export class CheckoutSessionRepository extends ICheckoutSessionRepository {
         });
     }
 
-    // specific search
+    // SPECIFIC SEARCH
 
     async findActiveByUserId(userId: string): Promise<CheckoutSession | null> {
         return await this.repo.findOne({
@@ -109,25 +107,30 @@ export class CheckoutSessionRepository extends ICheckoutSessionRepository {
     }
 
     async findCompletedByUserId(userId: string): Promise<CheckoutSession[]> {
+        const completedStatuses = [
+            CheckoutSessionStatus.COMPLETED,
+            CheckoutSessionStatus.CANCELLED,
+            CheckoutSessionStatus.EXPIRED,
+            CheckoutSessionStatus.FAILED
+        ];
+        
         return await this.repo.find({
             where: {
                 userId,
-                status: In([
-                    CheckoutSessionStatus.COMPLETED,
-                    CheckoutSessionStatus.CANCELLED
-                ])
+                status: In(completedStatuses)
             },
             order: { createdAt: 'DESC' }
         });
     }
 
-    // specific functions
+    // SPECIFIC FUNCTIONS
 
     async updateStatus(sessionId: string, status: CheckoutSessionStatus): Promise<CheckoutSession> {
         await this.repo.update(sessionId, {
             status,
             updatedAt: new Date()
         });
+        
         const session = await this.findById(sessionId);
         if (!session) {
             throw new Error(`Checkout session with id ${sessionId} not found`);
@@ -155,11 +158,17 @@ export class CheckoutSessionRepository extends ICheckoutSessionRepository {
             throw new Error(`Checkout session with id ${sessionId} not found`);
         }
         
-        session.orders = [...(session.orders || []), ...orders];
+        // Initialize orders array if it's null/undefined
+        if (!session.orders) {
+            session.orders = [];
+        }
+        
+        // Add new orders
+        session.orders.push(...orders);
         await this.repo.save(session);
     }
 
-    // timeout management
+    // TIMEOUT MANAGEMENT
 
     async markExpiredSessions(thresholdDate: Date): Promise<number> {
         const result = await this.repo
@@ -178,12 +187,12 @@ export class CheckoutSessionRepository extends ICheckoutSessionRepository {
         return result.affected || 0;
     }
 
-    // relations with other entities
+    // RELATIONS WITH ENTITIES
 
     async findWithOrdersAndItems(sessionId: string): Promise<CheckoutSession | null> {
         return await this.repo.findOne({
             where: { id: sessionId },
-            relations: ['orders', 'orders.items', 'orders.items.product']
+            relations: ['orders', 'orders.items']
         });
     }
 
@@ -193,13 +202,12 @@ export class CheckoutSessionRepository extends ICheckoutSessionRepository {
             relations: [
                 'orders',
                 'orders.items',
-                'orders.items.product',
-                'orders.kiosk'
+                'orders.items.product'
             ]
         });
     }
 
-    // count
+    // COUNT
 
     async countByStatus(status: CheckoutSessionStatus): Promise<number> {
         return await this.repo.count({
@@ -213,7 +221,7 @@ export class CheckoutSessionRepository extends ICheckoutSessionRepository {
         });
     }
 
-    // existence
+    // EXISTENCE
 
     async existsActiveForUser(userId: string): Promise<boolean> {
         const count = await this.repo.count({
@@ -235,7 +243,7 @@ export class CheckoutSessionRepository extends ICheckoutSessionRepository {
         return count > 0;
     }
 
-    // kiosks methods
+    // KIOSKS METHODS
 
     async findSessionsByKioskUserId(kioskUserId: number): Promise<CheckoutSession[]> {
         return await this.repo
@@ -261,21 +269,18 @@ export class CheckoutSessionRepository extends ICheckoutSessionRepository {
             .getMany();
     }
 
-    // additional methods
+    // TRANSACTION SUPPORT
+
+    async executeInTransaction<T>(callback: () => Promise<T>): Promise<T> {
+        return await this.dataSource.transaction(callback);
+    }
+
+    // ADDITIONAL METHODS (not in interface but useful)
 
     async findRecentSessions(limit: number = 50): Promise<CheckoutSession[]> {
         return await this.repo.find({
             order: { createdAt: 'DESC' },
             take: limit
-        });
-    }
-
-    async findSessionsWithTotalGreaterThan(amount: number): Promise<CheckoutSession[]> {
-        return await this.repo.find({
-            where: {
-                totalAmount: MoreThanOrEqual(amount.toString())
-            },
-            order: { createdAt: 'DESC' }
         });
     }
 
@@ -288,16 +293,13 @@ export class CheckoutSessionRepository extends ICheckoutSessionRepository {
         });
     }
 
-    // transactions
-
-    async executeInTransaction<T>(callback: () => Promise<T>): Promise<T> {
-        return await this.dataSource.transaction(callback);
-    }
-
-    // cancelation methods
-
-    async cancelSession(sessionId: string): Promise<CheckoutSession> {
-        return await this.updateStatus(sessionId, CheckoutSessionStatus.CANCELLED);
+    async findSessionsWithTotalGreaterThan(amount: number): Promise<CheckoutSession[]> {
+        return await this.repo.find({
+            where: {
+                totalAmount: MoreThanOrEqual(amount.toString())
+            },
+            order: { createdAt: 'DESC' }
+        });
     }
 
     async findCancellableSessions(): Promise<CheckoutSession[]> {
@@ -311,5 +313,80 @@ export class CheckoutSessionRepository extends ICheckoutSessionRepository {
             },
             relations: ['orders']
         });
+    }
+
+    async cancelSession(sessionId: string): Promise<CheckoutSession> {
+        return await this.updateStatus(sessionId, CheckoutSessionStatus.CANCELLED);
+    }
+    
+    async findSessionsByUserAndStatus(
+        userId: string, 
+        statuses: CheckoutSessionStatus[]
+    ): Promise<CheckoutSession[]> {
+        return await this.repo.find({
+            where: {
+                userId,
+                status: In(statuses)
+            },
+            order: { createdAt: 'DESC' }
+        });
+    }
+
+    async findSessionsWithExpiringOrders(thresholdDate: Date): Promise<CheckoutSession[]> {
+        return await this.repo
+            .createQueryBuilder('session')
+            .innerJoinAndSelect('session.orders', 'order')
+            .where('order.expiresAt < :threshold', { threshold: thresholdDate })
+            .andWhere('order.status IN (:...orderStatuses)', {
+                orderStatuses: ['PENDING_KIOSK_CONFIRMATION', 'ACCEPTED']
+            })
+            .andWhere('session.status IN (:...sessionStatuses)', {
+                sessionStatuses: [CheckoutSessionStatus.PENDING, CheckoutSessionStatus.PROCESSING]
+            })
+            .orderBy('session.createdAt', 'DESC')
+            .getMany();
+    }
+
+    async bulkUpdateStatus(
+        sessionIds: string[], 
+        status: CheckoutSessionStatus
+    ): Promise<number> {
+        const result = await this.repo
+            .createQueryBuilder()
+            .update()
+            .set({
+                status,
+                updatedAt: new Date()
+            })
+            .where('id IN (:...ids)', { ids: sessionIds })
+            .execute();
+
+        return result.affected || 0;
+    }
+
+    async findSessionsWithProducts(): Promise<CheckoutSession[]> {
+        return await this.repo
+            .createQueryBuilder('session')
+            .innerJoinAndSelect('session.orders', 'order')
+            .innerJoinAndSelect('order.items', 'item')
+            .innerJoinAndSelect('item.product', 'product')
+            .orderBy('session.createdAt', 'DESC')
+            .getMany();
+    }
+
+    async findSessionsByProductId(productId: string): Promise<CheckoutSession[]> {
+        return await this.repo
+            .createQueryBuilder('session')
+            .innerJoin('session.orders', 'order')
+            .innerJoin('order.items', 'item')
+            .where('item.productId = :productId', { productId })
+            .andWhere('session.status IN (:...statuses)', {
+                statuses: [
+                    CheckoutSessionStatus.COMPLETED,
+                    CheckoutSessionStatus.PROCESSING
+                ]
+            })
+            .orderBy('session.createdAt', 'DESC')
+            .getMany();
     }
 }

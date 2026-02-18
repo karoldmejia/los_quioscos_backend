@@ -19,13 +19,15 @@ import { BatchReservationService } from "../services/reservation.service";
 import { BatchReservationRepository } from "../repositories/impl/reservation.repository";
 import { OrderMaintenanceService } from "../services/order-mainteinance.service";
 import { CheckoutSessionRepository } from "../repositories/impl/checkout-session.repository";
+import { CheckoutService } from "../services/checkout-session.service";
+import { CheckoutController } from "../controllers/checkout-session.controller";
 
 @Module({
     imports: [
         TypeOrmModule.forFeature([Cart, CartItem, Order, OrderItem, CheckoutSession, BatchReservation]),
         ProductsModule
     ],
-    controllers: [CartController, OrderController],
+    controllers: [CartController, OrderController, CheckoutController],
     providers: [
         CartRepository,
         CartItemRepository,
@@ -36,7 +38,8 @@ import { CheckoutSessionRepository } from "../repositories/impl/checkout-session
         BatchReservationService,
         BatchReservationRepository,
         OrderMaintenanceService,
-        CheckoutSessionRepository
+        CheckoutSessionRepository,
+        CheckoutService,
     ],
     exports: [
         CartRepository,
@@ -47,7 +50,9 @@ import { CheckoutSessionRepository } from "../repositories/impl/checkout-session
         OrderItemRepository,
         BatchReservationService,
         BatchReservationRepository,
-        OrderMaintenanceService
+        OrderMaintenanceService,
+        CheckoutSessionRepository,
+        CheckoutService,
     ],
 })
 export class OrdersModule {}
