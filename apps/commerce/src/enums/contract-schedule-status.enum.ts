@@ -1,0 +1,6 @@
+export enum ContractScheduleStatus {
+  SCHEDULED = 'SCHEDULED',
+  SKIPPED = 'SKIPPED',
+  ORDER_GENERATED = 'ORDER_GENERATED',
+  CANCELLED = 'CANCELLED',
+}

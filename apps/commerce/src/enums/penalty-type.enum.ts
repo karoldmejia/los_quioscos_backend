@@ -1,0 +1,5 @@
+export enum PenaltyType {
+  NONE = 'NONE',
+  FIFTY_PERCENT = 'FIFTY_PERCENT',
+  ONE_HUNDRED_PERCENT = 'ONE_HUNDRED_PERCENT'
+}

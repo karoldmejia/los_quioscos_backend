@@ -2,6 +2,7 @@ import {Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColu
 import { ProductCategory } from '../enums/product-category.enum';
 import { UnitMeasure } from '../enums/unit-measure.enum';
 import { Batch } from './batch.entity';
+import { ContractItem } from './contract-item.entity';
 
 @Entity('products')
     export class Product {
@@ -50,4 +51,7 @@ import { Batch } from './batch.entity';
 
     @OneToMany(() => Batch, (batch) => batch.product, { cascade: true })
     batches: Batch[];
+    
+  @OneToMany(() => ContractItem, (item) => item.product)
+  contractItems: ContractItem[];
 }

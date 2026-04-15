@@ -74,12 +74,6 @@
     "testEnvironment": "node",
     "roots": [
       "<rootDir>/"
-    ],
-    "setupFilesAfterEnv": [
-      "<rootDir>/test/setup.ts"
-    ],
-    "maxWorkers": 1,
-    "maxConcurrency": 1,
-    "runInBand": true
+    ]
   }
 }
