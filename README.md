@@ -17,10 +17,6 @@ The system handles the full lifecycle of a commerce platform:
 
 It is designed to support **real-world constraints** such as perishable inventory, asynchronous workflows, and regulatory validation.
 
-<p align="center">
-  <img src="./screenshots/image.png" width="100%" />
-</p>
-
 #### Engineering highlights
 
 * Designed a **hybrid database architecture** (SQL + NoSQL) based on data access patterns
