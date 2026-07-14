@@ -1,23 +1,22 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { RpcException } from '@nestjs/microservices';
-import { ContractScheduleStatus } from '../enums/contract-schedule-status.enum';
-import { ContractScheduleVersionStatus } from '../enums/contract-schedule-version-status.enum';
 import { ContractStatus } from '../enums/contract-status.enum';
 import { ProposedBy } from '../enums/proposed-by.enum';
 import { ContractItemRepository } from '../repositories/impl/contract-item.repository';
-import { ContractScheduleItemRepository } from '../repositories/impl/contract-schedule-item.repository';
-import { ContractScheduleVersionRepository } from '../repositories/impl/contract-schedule-version.repository';
-import { ContractScheduleRepository } from '../repositories/impl/contract-schedule.repository';
 import { ContractRepository } from '../repositories/impl/contract.repository';
-import { OrderGenerationResultDto, ScheduleGenerationSummaryDto } from '../dtos/order-generation.dto';
+import { OrderGenerationResultDto, DeliveryGenerationSummaryDto } from '../dtos/order-generation.dto';
 import { OrderService } from './order.service';
 import { ExpiringContractDto, RenewalNotificationDto, RenewalResultDto } from '../dtos/contract-renewal.dto';
 import { ContractVersionRepository } from '../repositories/impl/contract-version.repository';
+import { DeliveryRepository } from '../repositories/impl/delivery.repository';
+import { TargetType } from '../enums/target-type.enum';
+import { DeliveryStatus } from '../enums/delivery-status.enum';
+import { VersionStatus } from '../enums/version-status.enum';
 
 @Injectable()
-export class ContractScheduleService {
-    private readonly logger = new Logger(ContractScheduleService.name);
+export class DeliveryService {
+    private readonly logger = new Logger(DeliveryService.name);
     private readonly WEEKS_TO_GENERATE = 6;
     private readonly RENEWAL_NOTIFICATION_DAYS = 14;
     private readonly EXPIRY_CHECK_INTERVALS = [14, 7, 3, 1];
@@ -27,36 +26,34 @@ export class ContractScheduleService {
         private readonly contractRepository: ContractRepository,
         private readonly contractItemRepository: ContractItemRepository,
         private readonly contractVersionRepository: ContractVersionRepository,
-        private readonly contractScheduleRepository: ContractScheduleRepository,
-        private readonly contractScheduleVersionRepository: ContractScheduleVersionRepository,
-        private readonly contractScheduleItemRepository: ContractScheduleItemRepository,
+        private readonly deliveryRepository: DeliveryRepository,
         // Services
         private readonly ordersService: OrderService,
     ) { }
 
     // cron jobs
     @Cron('0 2 * * *')
-    async generateSchedulesDaily() {
-        this.logger.log('Running daily schedule generation');
+    async generateDeliveriesDaily() {
+        this.logger.log('Running daily deliveries generation');
 
         try {
             const result = await this.runFullGenerationProcess();
-            this.logger.log(`Daily schedule generation completed:`, result);
+            this.logger.log(`Daily deliveries generation completed:`, result);
         } catch (error: any) {
-            this.logger.error(`Daily schedule generation failed: ${error.message}`);
+            this.logger.error(`Daily deliveries generation failed: ${error.message}`);
         }
     }
 
     @Cron('0 * * * *')
-    async checkUpcomingSchedules() {
-        this.logger.log('Checking for upcoming schedules');
+    async checkUpcomingDeliveries() {
+        this.logger.log('Checking for upcoming deliveries');
 
         try {
-            const results = await this.generateOrdersForUpcomingSchedules();
+            const results = await this.generateOrdersForUpcomingDeliveries();
             const successful = results.filter(r => r.success).length;
-            this.logger.log(`Generated ${successful} orders from ${results.length} schedules`);
+            this.logger.log(`Generated ${successful} orders from ${results.length} deliveries`);
         } catch (error: any) {
-            this.logger.error(`Failed to check upcoming schedules: ${error.message}`);
+            this.logger.error(`Failed to check upcoming deliveries: ${error.message}`);
         }
     }
 
@@ -100,53 +97,50 @@ export class ContractScheduleService {
     }
 
     // full generation process
-    async runFullGenerationProcess(): Promise<ScheduleGenerationSummaryDto> {
+    async runFullGenerationProcess(): Promise<DeliveryGenerationSummaryDto> {
         this.logger.log('Starting full generation process');
 
-        const scheduleResult = await this.generateSchedulesForAllContracts();
-        const orderResult = await this.generateOrdersForUpcomingSchedules();
+        const deliveryResult = await this.generateDeliveriesForAllContracts();
+        const orderResult = await this.generateOrdersForUpcomingDeliveries();
 
         return {
-            contracts_processed: scheduleResult.contracts_processed,
-            schedules_created: scheduleResult.schedules_created,
+            contracts_processed: deliveryResult.contracts_processed,
+            deliveries_created: deliveryResult.deliveries_created,
             orders_generated: orderResult.filter(r => r.success).length,
             errors: orderResult.filter(r => !r.success).map(r => ({
-                schedule_id: r.schedule_id,
+                delivery_id: r.delivery_id,
                 error: r.error || 'Unknown error'
             }))
         };
     }
 
-    // schedule generation
-    async generateSchedulesForAllContracts(): Promise<{
-        contracts_processed: number;
-        schedules_created: number;
-    }> {
-        this.logger.log('Starting schedule generation for all active contracts');
+    // deliveries generation
+    async generateDeliveriesForAllContracts(): Promise<{contracts_processed: number; deliveries_created: number}> {
+        this.logger.log('Starting deliveries generation for all active contracts');
 
         const activeContracts = await this.contractRepository.findActiveContracts();
         this.logger.log(`Found ${activeContracts.length} active contracts`);
 
-        let totalSchedulesCreated = 0;
+        let totalDeliveriesCreated = 0;
 
         for (const contract of activeContracts) {
             try {
-                const schedulesCreated = await this.generateSchedulesForContract(contract.contract_id);
-                totalSchedulesCreated += schedulesCreated;
+                const deliveries_created = await this.generateDeliveriesForContract(contract.contract_id);
+                totalDeliveriesCreated += deliveries_created;
             } catch (error: any) {
-                this.logger.error(`Error generating schedules for contract ${contract.contract_id}: ${error.message}`);
+                this.logger.error(`Error generating deliveries for contract ${contract.contract_id}: ${error.message}`);
             }
         }
 
-        this.logger.log(`Schedule generation completed. Created ${totalSchedulesCreated} schedules`);
+        this.logger.log(`Delivery generation completed. Created ${totalDeliveriesCreated} deliveries`);
 
         return {
             contracts_processed: activeContracts.length,
-            schedules_created: totalSchedulesCreated
+            deliveries_created: totalDeliveriesCreated
         };
     }
 
-    async generateSchedulesForContract(contractId: string): Promise<number> {
+    async generateDeliveriesForContract(contractId: string): Promise<number> {
         const contract = await this.contractRepository.findById(contractId);
         if (!contract) {
             throw new RpcException({
@@ -162,9 +156,9 @@ export class ContractScheduleService {
             });
         }
 
-        const existingSchedules = await this.contractScheduleRepository.findByContractId(contractId);
+        const existingDeliveries = await this.deliveryRepository.findByContractId(contractId);
         const existingDates = new Set(
-            existingSchedules.map(s =>
+            existingDeliveries.map(s =>
                 new Date(s.scheduled_delivery_date).toISOString().split('T')[0]
             )
         );
@@ -180,39 +174,33 @@ export class ContractScheduleService {
         );
 
         if (datesToCreate.length === 0) {
-            this.logger.log(`No new schedules needed for contract ${contractId}`);
+            this.logger.log(`No new deliveries needed for contract ${contractId}`);
             return 0;
         }
 
-        this.logger.log(`Creating ${datesToCreate.length} new schedules for contract ${contractId}`);
+        this.logger.log(`Creating ${datesToCreate.length} new deliveries for contract ${contractId}`);
 
-        const schedulesToCreate = datesToCreate.map(date => ({
+        const deliveriesToCreate = datesToCreate.map(date => ({
             contract_id: contractId,
             scheduled_delivery_date: date,
-            status: ContractScheduleStatus.SCHEDULED
+            status: DeliveryStatus.SCHEDULED
         }));
 
-        const createdSchedules = await this.contractScheduleRepository.createMany(schedulesToCreate);
+        const createdDeliveries = await this.deliveryRepository.createMany(deliveriesToCreate);
 
-        for (const schedule of createdSchedules) {
-            await this.createInitialScheduleVersion(schedule.contract_schedule_id, contractId);
+        for (const delivery of createdDeliveries) {
+            await this.createInitialDeliveryVersion(delivery.delivery_id, contractId);
         }
 
-        this.logger.log(`Created ${createdSchedules.length} schedules for contract ${contractId}`);
-        return createdSchedules.length;
+        this.logger.log(`Created ${createdDeliveries.length} deliveries for contract ${contractId}`);
+        return createdDeliveries.length;
     }
 
-    async getItemsForSchedule(scheduleId: string): Promise<{
-        items: any[];
-        version_number: number;
-        source: 'contract' | 'schedule_version';
-    }> {
-        const acceptedVersion = await this.contractScheduleVersionRepository.findAcceptedVersion(scheduleId);
+    async getItemsForDelivery(deliveryId: string): Promise<{items: any[]; version_number: number; source: 'contract' | 'delivery_version'}> {
+        const acceptedVersion = await this.contractVersionRepository.findAcceptedVersion(TargetType.DELIVERY, deliveryId);
 
         if (acceptedVersion) {
-            const items = await this.contractScheduleItemRepository.findByVersionId(
-                acceptedVersion.contract_schedule_version_id
-            );
+            const items = await this.contractItemRepository.findByVersionId(TargetType.DELIVERY, deliveryId, acceptedVersion.contract_version_id);
             return {
                 items: items.map(item => ({
                     product_id: item.product_id,
@@ -221,19 +209,17 @@ export class ContractScheduleService {
                     requirements_json: item.requirements_json
                 })),
                 version_number: acceptedVersion.version_number,
-                source: 'schedule_version'
+                source: 'delivery_version'
             };
         }
 
-        const versions = await this.contractScheduleVersionRepository.findByScheduleId(scheduleId);
+        const versions = await this.contractVersionRepository.findByTarget(TargetType.DELIVERY, deliveryId);
         const autoAppliedVersion = versions
-            .filter(v => v.status === ContractScheduleVersionStatus.AUTO_APPLIED)
+            .filter(v => v.status === VersionStatus.AUTO_APPLIED)
             .sort((a, b) => b.version_number - a.version_number)[0];
 
         if (autoAppliedVersion) {
-            const items = await this.contractScheduleItemRepository.findByVersionId(
-                autoAppliedVersion.contract_schedule_version_id
-            );
+            const items = await this.contractItemRepository.findByVersionId(TargetType.DELIVERY, deliveryId, autoAppliedVersion.contract_version_id);
             return {
                 items: items.map(item => ({
                     product_id: item.product_id,
@@ -242,16 +228,16 @@ export class ContractScheduleService {
                     requirements_json: item.requirements_json
                 })),
                 version_number: autoAppliedVersion.version_number,
-                source: 'schedule_version'
+                source: 'delivery_version'
             };
         }
 
-        const schedule = await this.contractScheduleRepository.findById(scheduleId);
-        if (!schedule) {
-            throw new Error(`Schedule not found: ${scheduleId}`);
+        const delivery = await this.deliveryRepository.findById(deliveryId);
+        if (!delivery) {
+            throw new Error(`Delivery not found: ${deliveryId}`);
         }
 
-        const contractItems = await this.contractItemRepository.findByContractId(schedule.contract_id);
+        const contractItems = await this.contractItemRepository.findByTargetId(TargetType.CONTRACT, delivery.contract_id);
         return {
             items: contractItems.map(item => ({
                 product_id: item.product_id,
@@ -265,47 +251,47 @@ export class ContractScheduleService {
     }
 
     // order generation
-    async generateOrdersForUpcomingSchedules(): Promise<OrderGenerationResultDto[]> {
-        this.logger.log('Looking for schedules ready for order generation');
+    async generateOrdersForUpcomingDeliveries(): Promise<OrderGenerationResultDto[]> {
+        this.logger.log('Looking for deliveries ready for order generation');
 
         const results: OrderGenerationResultDto[] = [];
 
         try {
-            const schedules = await this.contractScheduleRepository.findSchedulesForOrderGeneration(3);
-            this.logger.log(`Found ${schedules.length} schedules ready for order generation`);
+            const deliveries = await this.deliveryRepository.findDeliveriesForOrderGeneration(3);
+            this.logger.log(`Found ${deliveries.length} deliveries ready for order generation`);
 
-            for (const schedule of schedules) {
+            for (const delivery of deliveries) {
                 try {
-                    const contract = await this.contractRepository.findById(schedule.contract_id);
+                    const contract = await this.contractRepository.findById(delivery.contract_id);
                     if (!contract || contract.status !== ContractStatus.ACTIVE) {
-                        this.logger.warn(`Contract ${schedule.contract_id} is not active for schedule ${schedule.contract_schedule_id}`);
-                        await this.contractScheduleRepository.updateStatus(
-                            schedule.contract_schedule_id,
-                            ContractScheduleStatus.CANCELLED
+                        this.logger.warn(`Contract ${delivery.contract_id} is not active for delivery ${delivery.delivery_id}`);
+                        await this.deliveryRepository.updateStatus(
+                            delivery.delivery_id,
+                            DeliveryStatus.CANCELLED
                         );
                         results.push({
                             success: false,
-                            schedule_id: schedule.contract_schedule_id,
+                            delivery_id: delivery.delivery_id,
                             error: 'Contract is not active'
                         });
                         continue;
                     }
 
-                    const result = await this.generateOrderForSchedule(schedule);
+                    const result = await this.generateOrderForDelivery(delivery);
                     results.push(result);
 
                     if (result.success) {
-                        await this.contractScheduleRepository.updateStatus(
-                            schedule.contract_schedule_id,
-                            ContractScheduleStatus.ORDER_GENERATED
+                        await this.deliveryRepository.updateStatus(
+                            delivery.delivery_id,
+                            DeliveryStatus.ORDER_GENERATED
                         );
-                        this.logger.log(`Order ${result.order_id} generated for schedule ${schedule.contract_schedule_id}`);
+                        this.logger.log(`Order ${result.order_id} generated for delivery ${delivery.delivery_id}`);
                     }
                 } catch (error: any) {
-                    this.logger.error(`Error processing schedule ${schedule.contract_schedule_id}: ${error.message}`);
+                    this.logger.error(`Error processing delivery ${delivery.delivery_id}: ${error.message}`);
                     results.push({
                         success: false,
-                        schedule_id: schedule.contract_schedule_id,
+                        delivery_id: delivery.delivery_id,
                         error: error.message
                     });
                 }
@@ -318,36 +304,28 @@ export class ContractScheduleService {
         return results;
     }
 
-    async generateOrderForScheduleId(scheduleId: string): Promise<OrderGenerationResultDto> {
-        const schedule = await this.contractScheduleRepository.findById(scheduleId);
-        if (!schedule) {
+    async generateOrderForDeliveryId(deliveryId: string): Promise<OrderGenerationResultDto> {
+        const delivery = await this.deliveryRepository.findById(deliveryId);
+        if (!delivery) {
             return {
                 success: false,
-                schedule_id: scheduleId,
-                error: 'Schedule not found'
+                delivery_id: deliveryId,
+                error: 'Delivery not found'
             };
         }
 
-        return await this.generateOrderForSchedule(schedule);
+        return await this.generateOrderForDelivery(delivery);
     }
 
-    async markSchedulesAsSkipped(
-        contractId: string,
-        startDate: Date,
-        endDate: Date
-    ): Promise<number> {
-        const schedules = await this.contractScheduleRepository.findSchedulesForDateRange(
-            contractId,
-            startDate,
-            endDate
-        );
+    async markDeliveriesAsSkipped(contractId: string, startDate: Date, endDate: Date): Promise<number> {
+        const deliveries = await this.deliveryRepository.findDeliveriesForDateRange(contractId, startDate, endDate);
 
         let skippedCount = 0;
-        for (const schedule of schedules) {
-            if (schedule.status === ContractScheduleStatus.SCHEDULED) {
-                await this.contractScheduleRepository.updateStatus(
-                    schedule.contract_schedule_id,
-                    ContractScheduleStatus.SKIPPED
+        for (const delivery of deliveries) {
+            if (delivery.status === DeliveryStatus.SCHEDULED) {
+                await this.deliveryRepository.updateStatus(
+                    delivery.delivery_id,
+                    DeliveryStatus.SKIPPED
                 );
                 skippedCount++;
             }
@@ -420,7 +398,7 @@ export class ContractScheduleService {
                 };
             }
 
-            const originalItems = await this.contractItemRepository.findByContractId(contractId);
+            const originalItems = await this.contractItemRepository.findByTargetId(TargetType.CONTRACT, contractId);
 
             const newStartDate = new Date(originalContract.end_date);
             newStartDate.setDate(newStartDate.getDate() + 1);
@@ -447,13 +425,11 @@ export class ContractScheduleService {
                 status: ContractStatus.DRAFT
             });
 
-            await this.contractItemRepository.cloneItemsFromContract(
-                contractId,
-                newContract.contract_id
-            );
+            await this.contractItemRepository.cloneItems(TargetType.CONTRACT, contractId, TargetType.CONTRACT, newContract.contract_id);
 
             await this.contractVersionRepository.create({
-                contract_id: newContract.contract_id,
+                target_type: TargetType.CONTRACT,
+                target_id: newContract.contract_id,
                 version_number: 1,
                 proposed_by: 'SYSTEM',
                 terms_json_snapshot: {
@@ -517,53 +493,54 @@ export class ContractScheduleService {
     }
 
     // private helper methods
-    private async createInitialScheduleVersion(scheduleId: string, contractId: string): Promise<void> {
-        const contractItems = await this.contractItemRepository.findByContractId(contractId);
+    private async createInitialDeliveryVersion(deliveryId: string, contractId: string): Promise<void> {
+        const contractItems = await this.contractItemRepository.findByTargetId(TargetType.CONTRACT, contractId);
 
         if (contractItems.length === 0) {
-            this.logger.warn(`No contract items found for contract ${contractId} when creating schedule ${scheduleId}`);
+            this.logger.warn(`No contract items found for contract ${contractId} when creating delivery ${deliveryId}`);
             return;
         }
 
-        const version = await this.contractScheduleVersionRepository.create({
-            contract_schedule_id: scheduleId,
+        const version = await this.contractVersionRepository.create({
+            target_type: TargetType.DELIVERY,
+            target_id: deliveryId,
             version_number: 1,
             proposed_by: ProposedBy.SYSTEM,
-            change_reason: 'Initial schedule creation',
-            status: ContractScheduleVersionStatus.AUTO_APPLIED
+            change_reason: 'Initial delivery creation',
+            status: VersionStatus.AUTO_APPLIED
         });
 
         const versionItems = contractItems.map(item => ({
-            contract_schedule_version_id: version.contract_schedule_version_id,
+            version_id: version.contract_version_id,
             product_id: item.product_id,
             quantity: item.quantity,
             unit_price: item.unit_price,
             requirements_json: item.requirements_json
         }));
 
-        await this.contractScheduleItemRepository.createMany(versionItems);
-        this.logger.log(`Created initial version for schedule ${scheduleId} with ${versionItems.length} items`);
+        await this.contractItemRepository.createMany(versionItems);
+        this.logger.log(`Created initial version for delivery ${deliveryId} with ${versionItems.length} items`);
     }
 
-    public async generateOrderForSchedule(schedule: any): Promise<OrderGenerationResultDto> {
+    public async generateOrderForDelivery(delivery: any): Promise<OrderGenerationResultDto> {
         try {
-            const itemsResult = await this.getItemsForSchedule(
-                schedule.contract_schedule_id
+            const itemsResult = await this.getItemsForDelivery(
+                delivery.delivery_id
             );
 
             if (itemsResult.items.length === 0) {
                 return {
                     success: false,
-                    schedule_id: schedule.contract_schedule_id,
-                    error: 'No items found for schedule'
+                    delivery_id: delivery.delivery_id,
+                    error: 'No items found for delivery'
                 };
             }
 
-            const contract = await this.contractRepository.findById(schedule.contract_id);
+            const contract = await this.contractRepository.findById(delivery.contract_id);
             if (!contract) {
                 return {
                     success: false,
-                    schedule_id: schedule.contract_schedule_id,
+                    delivery_id: delivery.delivery_id,
                     error: 'Contract not found'
                 };
             }
@@ -583,14 +560,14 @@ export class ContractScheduleService {
 
             return {
                 success: true,
-                schedule_id: schedule.contract_schedule_id,
+                delivery_id: delivery.delivery_id,
                 order_id: order.id
             };
         } catch (error: any) {
-            this.logger.error(`Failed to generate order for schedule ${schedule.contract_schedule_id}: ${error.message}`);
+            this.logger.error(`Failed to generate order for delivery ${delivery.delivery_id}: ${error.message}`);
             return {
                 success: false,
-                schedule_id: schedule.contract_schedule_id,
+                delivery_id: delivery.delivery_id,
                 error: error.message
             };
         }

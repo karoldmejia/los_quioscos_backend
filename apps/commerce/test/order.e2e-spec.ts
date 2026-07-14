@@ -13,6 +13,7 @@ import { CheckoutSessionStatus } from '../src/enums/checkout-session-status.enum
 
 dotenv.config({ path: '.env' });
 
+
 describe('Order Microservice (TCP) - e2e', () => {
     let app: INestMicroservice;
     let client: ClientProxy;

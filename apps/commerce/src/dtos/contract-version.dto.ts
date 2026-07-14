@@ -1,10 +1,14 @@
 import { IsUUID, IsString, IsEnum, IsOptional, IsObject, MinLength } from 'class-validator';
 import { ProposedBy } from '../enums/proposed-by.enum';
 import { ProposalStatus } from '../enums/proposal-status.enum';
+import { TargetType } from '../enums/target-type.enum';
 
 export class ProposeVersionDto {
+    @IsEnum([TargetType])
+    target_type: TargetType;
+
     @IsUUID()
-    contract_id: string;
+    target_id: string;
 
     @IsEnum(ProposedBy)
     proposed_by: ProposedBy;
@@ -20,7 +24,8 @@ export class ProposeVersionDto {
 
 export class ContractVersionResponseDto {
     contract_version_id: number;
-    contract_id: string;
+    target_type: string;
+    target_id: string;
     version_number: number;
     proposed_by: ProposedBy;
     terms_json_snapshot: any;
@@ -29,7 +34,8 @@ export class ContractVersionResponseDto {
 }
 
 export class VersionHistoryResponseDto {
-    contract_id: string;
+    target_type: string;
+    target_id: string;
     current_version: number;
     versions: ContractVersionResponseDto[];
 }

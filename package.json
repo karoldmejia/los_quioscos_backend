@@ -13,11 +13,13 @@
     "test:e2e:users": "npm run test:e2e:users -w apps/users",
     "test:e2e:documents": "npm run test:e2e:documents -w apps/documents",
     "test:e2e:api-gateway": "npm run test:e2e:api-gateway -w apps/api-gateway",
-    "test:e2e:commerce": "npm run test:e2e:commerce -w apps/commerce"
+    "test:e2e:commerce": "npm run test:e2e:commerce -w apps/commerce",
+        "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
     "jest": "^30.3.0",
     "ts-jest": "^29.4.9"
   }
+  
 }

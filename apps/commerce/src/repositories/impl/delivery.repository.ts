@@ -1,52 +1,52 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between } from 'typeorm';
-import { IContractScheduleRepository } from '../icontract-schedule.repository';
-import { ContractSchedule } from '../../entities/contract-schedule.entity';
-import { ContractScheduleStatus } from '../../enums/contract-schedule-status.enum';
+import { DeliveryStatus } from '../../enums/delivery-status.enum';
+import { IDeliveryRepository } from '../idelivery.repository';
+import { Delivery } from '../../entities/delivery.entity';
 
 @Injectable()
-export class ContractScheduleRepository extends IContractScheduleRepository {
+export class DeliveryRepository extends IDeliveryRepository {
 
     constructor(
-        @InjectRepository(ContractSchedule)
-        private readonly repo: Repository<ContractSchedule>,
+        @InjectRepository(Delivery)
+        private readonly repo: Repository<Delivery>,
     ) {
         super();
     }
 
-    async create(schedule: Partial<ContractSchedule>): Promise<ContractSchedule> {
-        const newSchedule = this.repo.create({
-            ...schedule,
-            status: ContractScheduleStatus.SCHEDULED
+    async create(delivery: Partial<Delivery>): Promise<Delivery> {
+        const newDelivery = this.repo.create({
+            ...delivery,
+            status: DeliveryStatus.SCHEDULED
         });
-        return await this.repo.save(newSchedule);
+        return await this.repo.save(newDelivery);
     }
 
-    async createMany(schedules: Partial<ContractSchedule>[]): Promise<ContractSchedule[]> {
-        const newSchedules = this.repo.create(
+    async createMany(schedules: Partial<Delivery>[]): Promise<Delivery[]> {
+        const newDeliveries = this.repo.create(
             schedules.map(s => ({
                 ...s,
-                status: ContractScheduleStatus.SCHEDULED
+                status: DeliveryStatus.SCHEDULED
             }))
         );
-        return await this.repo.save(newSchedules);
+        return await this.repo.save(newDeliveries);
     }
 
-    async findById(scheduleId: string): Promise<ContractSchedule | null> {
+    async findById(deliveryId: string): Promise<Delivery | null> {
         return await this.repo.findOne({
-            where: { contract_schedule_id: scheduleId }
+            where: { delivery_id: deliveryId }
         });
     }
 
-    async findByContractId(contractId: string): Promise<ContractSchedule[]> {
+    async findByContractId(contractId: string): Promise<Delivery[]> {
         return await this.repo.find({
             where: { contract_id: contractId },
             order: { scheduled_delivery_date: 'ASC' }
         });
     }
 
-    async findSchedulesForDateRange(contractId: string, startDate: Date, endDate: Date): Promise<ContractSchedule[]> {
+    async findDeliveriesForDateRange(contractId: string, startDate: Date, endDate: Date): Promise<Delivery[]> {
         return await this.repo.find({
             where: {
                 contract_id: contractId,
@@ -56,7 +56,7 @@ export class ContractScheduleRepository extends IContractScheduleRepository {
         });
     }
 
-    async findSchedulesByDate(date: Date): Promise<ContractSchedule[]> {
+    async findDeliveriesByDate(date: Date): Promise<Delivery[]> {
         const startOfDay = new Date(date);
         startOfDay.setHours(0, 0, 0, 0);
 
@@ -71,14 +71,14 @@ export class ContractScheduleRepository extends IContractScheduleRepository {
         });
     }
 
-    async findSchedulesForOrderGeneration(changeDeadlineDays: number): Promise<ContractSchedule[]> {
+    async findDeliveriesForOrderGeneration(changeDeadlineDays: number): Promise<Delivery[]> {
         const today = new Date();
         const deadlineDate = new Date();
         deadlineDate.setDate(today.getDate() + changeDeadlineDays);
 
         return await this.repo.find({
             where: {
-                status: ContractScheduleStatus.SCHEDULED,
+                status: DeliveryStatus.SCHEDULED,
                 scheduled_delivery_date: Between(today, deadlineDate)
             },
             relations: [
@@ -91,9 +91,9 @@ export class ContractScheduleRepository extends IContractScheduleRepository {
         });
     }
 
-    async updateStatus(scheduleId: string, status: ContractScheduleStatus): Promise<void> {
+    async updateStatus(deliveryId: string, status: DeliveryStatus): Promise<void> {
         await this.repo.update(
-            { contract_schedule_id: scheduleId },
+            { delivery_id: deliveryId },
             {
                 status,
                 updated_at: new Date()

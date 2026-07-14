@@ -1,15 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { RpcException } from '@nestjs/microservices';
 import { ContractItemRepository } from '../repositories/impl/contract-item.repository';
-import { ContractScheduleVersionRepository } from '../repositories/impl/contract-schedule-version.repository';
-import { ContractScheduleRepository } from '../repositories/impl/contract-schedule.repository';
 import { ContractRepository } from '../repositories/impl/contract.repository';
-import { PenaltyService } from './penalty.service';
-import { CancelContractDto, CancellationResultDto, CancelScheduleDto, PauseContractDto } from '../dtos/contract-cancellation.dto';
-import { ContractScheduleStatus } from '../enums/contract-schedule-status.enum';
+import { CancelContractDto, CancelDeliveryDto, CancellationResultDto, PauseContractDto } from '../dtos/contract-cancellation.dto';
 import { ContractStatus } from '../enums/contract-status.enum';
-import { ContractScheduleVersionStatus } from '../enums/contract-schedule-version-status.enum';
 import { ProposedBy } from '../enums/proposed-by.enum';
+import { DeliveryRepository } from '../repositories/impl/delivery.repository';
+import { ContractVersionRepository } from '../repositories/impl/contract-version.repository';
+import { DeliveryStatus } from '../enums/delivery-status.enum';
+import { TargetType } from '../enums/target-type.enum';
+import { VersionStatus } from '../enums/version-status.enum';
 
 @Injectable()
 export class ContractCancellationService {
@@ -17,55 +17,44 @@ export class ContractCancellationService {
 
     constructor(
         private readonly contractRepository: ContractRepository,
-        private readonly contractScheduleRepository: ContractScheduleRepository,
-        private readonly contractScheduleVersionRepository: ContractScheduleVersionRepository,
+        private readonly deliveryRepository: DeliveryRepository,
+        private readonly contractVersionRepository: ContractVersionRepository,
         private readonly contractItemRepository: ContractItemRepository,
-        private readonly penaltyService: PenaltyService,
     ) { }
 
-    // Cancellation of a single schedule
-    async cancelSchedule(cancelDto: CancelScheduleDto): Promise<CancellationResultDto> {
-        const { schedule_id, cancelled_by, cancellation_date = new Date() } = cancelDto;
+    // Cancellation of a single delivery
+    async cancelDelivery(cancelDto: CancelDeliveryDto): Promise<CancellationResultDto> {
+        const { delivery_id, cancelled_by, cancellation_date = new Date() } = cancelDto;
 
-        const schedule = await this.contractScheduleRepository.findById(schedule_id);
-        if (!schedule) {
+        const delivery = await this.deliveryRepository.findById(delivery_id);
+        if (!delivery) {
             throw new RpcException({
                 status: 404,
-                message: `Schedule not found: ${schedule_id}`
+                message: `Delivery not found: ${delivery_id}`
             });
         }
 
-        const contract = await this.contractRepository.findById(schedule.contract_id);
+        const contract = await this.contractRepository.findById(delivery.contract_id);
         if (!contract) {
             throw new RpcException({
                 status: 404,
-                message: `Contract not found for schedule: ${schedule_id}`
+                message: `Contract not found for delivery: ${delivery_id}`
             });
         }
 
-        this.validateScheduleForCancellation(schedule, contract);
+        this.validateDeliveryForCancellation(delivery, contract);
 
-        const penalty = await this.penaltyService.calculateScheduleCancellationPenalty(schedule_id, cancellation_date);
-
-        if ((await penalty).penalty_amount > 0) {
-            this.logger.warn(`Penalty applied for schedule ${schedule_id}: $${(await penalty).penalty_amount}`);
-
-            if (this.penaltyService.shouldSuspendAccount((await penalty))) {
-                await this.handleAccountSuspension(contract, await penalty);
-            }
-        }
-        await this.contractScheduleRepository.updateStatus(
-            schedule_id,
-            ContractScheduleStatus.CANCELLED
+        await this.deliveryRepository.updateStatus(
+            delivery_id,
+            DeliveryStatus.CANCELLED
         );
-        await this.createCancellationVersion(schedule_id, cancelled_by, penalty);
+        await this.createCancellationVersion(delivery_id, cancelled_by);
 
         return {
             success: true,
             contract_id: contract.contract_id,
-            schedule_id: schedule_id,
-            new_status: ContractScheduleStatus.CANCELLED,
-            penalty: penalty
+            delivery_id: delivery_id,
+            new_status: DeliveryStatus.CANCELLED,
         };
     }
 
@@ -84,18 +73,18 @@ export class ContractCancellationService {
         this.validateContractForPause(contract, pause_start_date);
         this.validatePauseDates(contract, pause_start_date);
 
-        const schedulesInRange = await this.contractScheduleRepository.findSchedulesForDateRange(
+        const deliveriesInRange = await this.deliveryRepository.findDeliveriesForDateRange(
             contract_id,
             new Date(pause_start_date),
             new Date(pause_end_date)
         );
 
         let skippedCount = 0;
-        for (const schedule of schedulesInRange) {
-            if (schedule.status === ContractScheduleStatus.SCHEDULED) {
-                await this.contractScheduleRepository.updateStatus(
-                    schedule.contract_schedule_id,
-                    ContractScheduleStatus.SKIPPED
+        for (const delivery of deliveriesInRange) {
+            if (delivery.status === DeliveryStatus.SCHEDULED) {
+                await this.deliveryRepository.updateStatus(
+                    delivery.delivery_id,
+                    DeliveryStatus.SKIPPED
                 );
                 skippedCount++;
             }
@@ -106,7 +95,7 @@ export class ContractCancellationService {
             status: ContractStatus.PAUSED
         });
 
-        this.logger.log(`Contract ${contract_id} paused from ${pause_start_date} to ${pause_end_date}. ${skippedCount} schedules skipped`);
+        this.logger.log(`Contract ${contract_id} paused from ${pause_start_date} to ${pause_end_date}. ${skippedCount} deliveries skipped`);
 
         return {
             success: true,
@@ -160,27 +149,17 @@ export class ContractCancellationService {
         }
 
         this.validateContractForCancellation(contract);
-        const nextSchedule = await this.getNextScheduledDelivery(contract_id);
-        const penalty = await this.penaltyService.calculateContractCancellationPenalty(contract_id, cancellation_date);
-
-        // if there is a penalty, log it and check if account suspension is needed
-        if ((await penalty).penalty_amount > 0) {
-            this.logger.warn(`Penalty applied for contract ${contract_id} cancellation: $${(await penalty).penalty_amount}`);
-
-            if (this.penaltyService.shouldSuspendAccount((await penalty))) {
-                await this.handleAccountSuspension(contract, await penalty);
-            }
-        }
+        const nextDelivery = await this.getNextScheduledDelivery(contract_id);
 
         // cancel all future schedules
-        const schedules = await this.contractScheduleRepository.findByContractId(contract_id);
+        const schedules = await this.deliveryRepository.findByContractId(contract_id);
         const today = new Date();
 
-        for (const schedule of schedules) {
-            if (new Date(schedule.scheduled_delivery_date) >= today) {
-                await this.contractScheduleRepository.updateStatus(
-                    schedule.contract_schedule_id,
-                    ContractScheduleStatus.CANCELLED
+        for (const delivery of schedules) {
+            if (new Date(delivery.scheduled_delivery_date) >= today) {
+                await this.deliveryRepository.updateStatus(
+                    delivery.delivery_id,
+                    DeliveryStatus.CANCELLED
                 );
             }
         }
@@ -192,13 +171,12 @@ export class ContractCancellationService {
             success: true,
             contract_id: contract_id,
             new_status: ContractStatus.CANCELLED,
-            penalty: penalty
         };
     }
 
     // helper methods
 
-    private validateScheduleForCancellation(schedule: any, contract: any): void {
+    private validateDeliveryForCancellation(delivery: any, contract: any): void {
         if (contract.status !== ContractStatus.ACTIVE) {
             throw new RpcException({
                 status: 400,
@@ -207,19 +185,19 @@ export class ContractCancellationService {
         }
 
         const cancellableStatuses = [
-            ContractScheduleStatus.SCHEDULED,
-            ContractScheduleStatus.ORDER_GENERATED
+            DeliveryStatus.SCHEDULED,
+            DeliveryStatus.ORDER_GENERATED
         ];
 
-        if (!cancellableStatuses.includes(schedule.status)) {
+        if (!cancellableStatuses.includes(delivery.status)) {
             throw new RpcException({
                 status: 400,
-                message: `Schedule cannot be cancelled. Current status: ${schedule.status}`
+                message: `Delivery cannot be cancelled. Current status: ${delivery.status}`
             });
         }
 
-        if (schedule.status === ContractScheduleStatus.ORDER_GENERATED) {
-            this.logger.warn(`Schedule ${schedule.contract_schedule_id} has order generated. Cancellation will incur penalty.`);
+        if (delivery.status === DeliveryStatus.ORDER_GENERATED) {
+            this.logger.warn(`Delivery ${delivery.contract_delivery_id} has order generated. Cancellation will incur penalty.`);
         }
     }
 
@@ -268,39 +246,31 @@ export class ContractCancellationService {
     }
 
     private async getNextScheduledDelivery(contractId: string): Promise<any | null> {
-        const schedules = await this.contractScheduleRepository.findByContractId(contractId);
+        const schedules = await this.deliveryRepository.findByContractId(contractId);
         const today = new Date();
 
-        const futureSchedules = schedules
+        const futureDeliveries = schedules
             .filter(s =>
                 new Date(s.scheduled_delivery_date) > today &&
-                s.status === ContractScheduleStatus.SCHEDULED
+                s.status === DeliveryStatus.SCHEDULED
             )
             .sort((a, b) =>
                 new Date(a.scheduled_delivery_date).getTime() - new Date(b.scheduled_delivery_date).getTime()
             );
 
-        return futureSchedules[0] || null;
+        return futureDeliveries[0] || null;
     }
 
-    private async createCancellationVersion(scheduleId: string, cancelledBy: ProposedBy, penalty: any): Promise<void> {
-        const nextVersion = await this.contractScheduleVersionRepository.getNextVersionNumber(scheduleId);
+    private async createCancellationVersion(deliveryId: string, cancelledBy: ProposedBy): Promise<void> {
+        const nextVersion = await this.contractVersionRepository.getNextVersionNumber(TargetType.DELIVERY, deliveryId);
 
-        await this.contractScheduleVersionRepository.create({
-            contract_schedule_id: scheduleId,
+        await this.contractVersionRepository.create({
+            target_type: TargetType.DELIVERY,
+            target_id: deliveryId,
             version_number: nextVersion,
             proposed_by: cancelledBy,
-            change_reason: `Schedule cancelled. Penalty: $${penalty.penalty_amount}`,
-            status: ContractScheduleVersionStatus.AUTO_APPLIED
+            change_reason: `Delivery cancelled`,
+            status: VersionStatus.AUTO_APPLIED
         });
-    }
-
-    private async handleAccountSuspension(contract: any, penalty: any): Promise<void> {
-
-
-        this.logger.warn(
-            `Account for contract ${contract.contract_id} should be suspended `);
-
-        // TODO: implement suspension logic
     }
 }

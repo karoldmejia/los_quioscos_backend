@@ -11,6 +11,7 @@ import { LogisticsMode } from '../../enums/logistics-mode.enum';
 import { Product } from '../../entities/product.entity';
 import { ProductCategory } from '../../enums/product-category.enum';
 import { UnitMeasure } from '../../enums/unit-measure.enum';
+import { TargetType } from '../../enums/target-type.enum';
 
 describe('ContractService', () => {
     let service: ContractService;
@@ -64,8 +65,7 @@ describe('ContractService', () => {
         parent_contract: null,
         child_contracts: [],
         contractItems: [],
-        versions: [],
-        schedules: [],
+        deliveries: [],
     };
 
     const mockActiveContract: Contract = {
@@ -76,13 +76,14 @@ describe('ContractService', () => {
 
     const mockContractItem: ContractItem = {
         contract_item_id: 'item-123',
-        contract_id: 'contract-123',
+        target_type: TargetType.CONTRACT,
+        target_id: 'contract-123',
         product_id: 'product-123',
         quantity: 10,
         unit_price: 100.50,
         requirements_json: { color: 'red' },
         product: mockProduct,
-        contract: mockContract as any,
+        version_id: 0
     };
 
     beforeEach(async () => {
@@ -107,9 +108,9 @@ describe('ContractService', () => {
                 {
                     provide: ContractItemRepository,
                     useValue: {
-                        findByContractId: jest.fn(),
+                        findByTargetId: jest.fn(),
                         createMany: jest.fn(),
-                        cloneItemsFromContract: jest.fn(),
+                        cloneItems: jest.fn(),
                     },
                 },
                 {
@@ -152,7 +153,7 @@ describe('ContractService', () => {
             contractRepository.createContract.mockResolvedValue(mockContract);
             contractItemRepository.createMany.mockResolvedValue([mockContractItem]);
             contractRepository.findById.mockResolvedValue(mockContract);
-            contractItemRepository.findByContractId.mockResolvedValue([mockContractItem]);
+            contractItemRepository.findByTargetId.mockResolvedValue([mockContractItem]);
 
             const result = await service.createContract(createContractDto);
 
@@ -217,7 +218,7 @@ describe('ContractService', () => {
     describe('getContract', () => {
         it('should return contract when found', async () => {
             contractRepository.findById.mockResolvedValue(mockContract);
-            contractItemRepository.findByContractId.mockResolvedValue([mockContractItem]);
+            contractItemRepository.findByTargetId.mockResolvedValue([mockContractItem]);
 
             const result = await service.getContract('contract-123');
 
@@ -241,7 +242,7 @@ describe('ContractService', () => {
 
         it('should return all active contracts when no filters', async () => {
             contractRepository.findActiveContracts.mockResolvedValue([mockContract]);
-            contractItemRepository.findByContractId.mockResolvedValue([mockContractItem]);
+            contractItemRepository.findByTargetId.mockResolvedValue([mockContractItem]);
 
             const result = await service.getContracts(filterDto);
 
@@ -252,7 +253,7 @@ describe('ContractService', () => {
         it('should filter by business_id', async () => {
             const filterWithBusiness = { business_id: 'business-123' };
             contractRepository.findContractsByBusiness.mockResolvedValue([mockContract]);
-            contractItemRepository.findByContractId.mockResolvedValue([mockContractItem]);
+            contractItemRepository.findByTargetId.mockResolvedValue([mockContractItem]);
 
             const result = await service.getContracts(filterWithBusiness);
 
@@ -263,7 +264,7 @@ describe('ContractService', () => {
         it('should filter by kiosk_id', async () => {
             const filterWithKiosk = { kiosk_id: 'kiosk-123' };
             contractRepository.findContractsByKiosk.mockResolvedValue([mockContract]);
-            contractItemRepository.findByContractId.mockResolvedValue([mockContractItem]);
+            contractItemRepository.findByTargetId.mockResolvedValue([mockContractItem]);
 
             const result = await service.getContracts(filterWithKiosk);
 
@@ -274,7 +275,7 @@ describe('ContractService', () => {
         it('should filter by status', async () => {
             const filterWithStatus = { status: ContractStatus.DRAFT };
             contractRepository.findByStatus.mockResolvedValue([mockContract]);
-            contractItemRepository.findByContractId.mockResolvedValue([mockContractItem]);
+            contractItemRepository.findByTargetId.mockResolvedValue([mockContractItem]);
 
             const result = await service.getContracts(filterWithStatus);
 
@@ -291,7 +292,7 @@ describe('ContractService', () => {
             };
 
             contractRepository.findActiveContracts.mockResolvedValue([mockContract]);
-            contractItemRepository.findByContractId.mockResolvedValue([mockContractItem]);
+            contractItemRepository.findByTargetId.mockResolvedValue([mockContractItem]);
 
             const result = await service.getContracts(filterWithDates);
 
@@ -307,7 +308,7 @@ describe('ContractService', () => {
             };
 
             contractRepository.findActiveContracts.mockResolvedValue([mockContract]);
-            contractItemRepository.findByContractId.mockResolvedValue([mockContractItem]);
+            contractItemRepository.findByTargetId.mockResolvedValue([mockContractItem]);
 
             const result = await service.getContracts(filterWithDates);
 
@@ -324,7 +325,7 @@ describe('ContractService', () => {
             contractRepository.findById.mockResolvedValueOnce({ ...draftContract, status: ContractStatus.ACTIVE });
             contractRepository.updateStatus.mockResolvedValue(undefined);
             contractRepository.updateContract.mockResolvedValue(undefined);
-            contractItemRepository.findByContractId.mockResolvedValue([mockContractItem]);
+            contractItemRepository.findByTargetId.mockResolvedValue([mockContractItem]);
 
             const result = await service.activateContract('contract-123', activateDto);
 
@@ -341,7 +342,7 @@ describe('ContractService', () => {
             contractRepository.findById.mockResolvedValueOnce({ ...negotiationContract, status: ContractStatus.ACTIVE });
             contractRepository.updateStatus.mockResolvedValue(undefined);
             contractRepository.updateContract.mockResolvedValue(undefined);
-            contractItemRepository.findByContractId.mockResolvedValue([mockContractItem]);
+            contractItemRepository.findByTargetId.mockResolvedValue([mockContractItem]);
 
             const result = await service.activateContract('contract-123', {});
 
@@ -355,7 +356,7 @@ describe('ContractService', () => {
             contractRepository.findById.mockResolvedValueOnce(draftContract);
             contractRepository.findById.mockResolvedValueOnce({ ...draftContract, status: ContractStatus.ACTIVE });
             contractRepository.updateStatus.mockResolvedValue(undefined);
-            contractItemRepository.findByContractId.mockResolvedValue([mockContractItem]);
+            contractItemRepository.findByTargetId.mockResolvedValue([mockContractItem]);
 
             await service.activateContract('contract-123', emptyActivateDto);
 
@@ -464,7 +465,7 @@ describe('ContractService', () => {
             contractRepository.findById.mockResolvedValueOnce(activeContract);
             contractRepository.findById.mockResolvedValueOnce(updatedContract);
             contractRepository.updateStatus.mockResolvedValue(undefined);
-            contractItemRepository.findByContractId.mockResolvedValue([mockContractItem]);
+            contractItemRepository.findByTargetId.mockResolvedValue([mockContractItem]);
 
             const result = await service.expireContract('contract-123');
 
@@ -615,7 +616,10 @@ describe('ContractService', () => {
         });
 
         describe('autoRenewContract', () => {
-            const originalContract = { ...mockActiveContract };
+
+            const endDate = new Date();
+            endDate.setDate(endDate.getDate() + 15)
+            const originalContract = { ...mockActiveContract, end_date: endDate };
             const newContract = { ...mockContract, contract_id: 'new-contract-456', status: ContractStatus.DRAFT };
 
             beforeEach(() => {
@@ -626,9 +630,9 @@ describe('ContractService', () => {
                 contractRepository.findById
                     .mockResolvedValueOnce(originalContract)
                     .mockResolvedValueOnce(newContract);
-                contractItemRepository.findByContractId.mockResolvedValue([mockContractItem]);
+                contractItemRepository.findByTargetId.mockResolvedValue([mockContractItem]);
                 contractRepository.createContract.mockResolvedValue(newContract);
-                contractItemRepository.cloneItemsFromContract.mockResolvedValue(null as any);
+                contractItemRepository.cloneItems.mockResolvedValue(null as any);
                 contractVersionRepository.create.mockResolvedValue(null as any);
 
                 const result = await service.autoRenewContract('active-contract-123');
@@ -637,7 +641,7 @@ describe('ContractService', () => {
                 expect(result.new_contract_id).toBe('new-contract-456');
                 expect(result.status).toBe('RENEWED');
                 expect(contractRepository.createContract).toHaveBeenCalled();
-                expect(contractItemRepository.cloneItemsFromContract).toHaveBeenCalled();
+                expect(contractItemRepository.cloneItems).toHaveBeenCalled();
                 expect(contractVersionRepository.create).toHaveBeenCalled();
             });
 
@@ -704,9 +708,9 @@ describe('ContractService', () => {
                 contractRepository.findById
                     .mockResolvedValueOnce(contractWithDates)
                     .mockResolvedValueOnce(newContractWithDates);
-                contractItemRepository.findByContractId.mockResolvedValue([mockContractItem]);
+                contractItemRepository.findByTargetId.mockResolvedValue([mockContractItem]);
                 contractRepository.createContract.mockResolvedValue(newContractWithDates);
-                contractItemRepository.cloneItemsFromContract.mockResolvedValue(null as any);
+                contractItemRepository.cloneItems.mockResolvedValue(null as any);
                 contractVersionRepository.create.mockResolvedValue(null as any);
 
                 await service.autoRenewContract('active-contract-123');
@@ -844,7 +848,7 @@ describe('ContractService', () => {
                 ];
 
                 contractRepository.findById.mockResolvedValue(mockContract);
-                contractItemRepository.findByContractId.mockResolvedValue(multipleItems);
+                contractItemRepository.findByTargetId.mockResolvedValue(multipleItems);
 
                 const result = await service.getContract('contract-123');
 
@@ -859,7 +863,7 @@ describe('ContractService', () => {
                 };
 
                 contractRepository.findById.mockResolvedValue(mockContract);
-                contractItemRepository.findByContractId.mockResolvedValue([itemWithoutProduct]);
+                contractItemRepository.findByTargetId.mockResolvedValue([itemWithoutProduct]);
 
                 const result = await service.getContract('contract-123');
 

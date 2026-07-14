@@ -23,7 +23,7 @@ export class CartController {
 
   @MessagePattern({ cmd: 'update_cart_status' })
   async updateCartStatus(@Payload() payload: { cartId: string; status: CartStatus }): Promise<Cart> {
-    const { cartId, status } = payload;
+    const { cartId, status } = payload; // ?
     return await this.cartService.updateCartStatus(cartId, status);
   }
 

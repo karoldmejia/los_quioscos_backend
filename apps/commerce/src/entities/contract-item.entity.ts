@@ -1,20 +1,17 @@
 import {Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn,} from 'typeorm';
-import { Contract } from './contract.entity';
 import { Product } from './product.entity';
+import { TargetType } from '../enums/target-type.enum';
 
 @Entity('contract_items')
 export class ContractItem {
   @PrimaryGeneratedColumn('uuid')
   contract_item_id: string;
 
-  @ManyToOne(() => Contract, (contract) => contract.contractItems, {
-    onDelete: 'CASCADE',
-  })
-  @JoinColumn({ name: 'contract_id' })
-  contract: Contract;
+  @Column({type: 'enum', enum: TargetType})
+  target_type: TargetType;
 
   @Column()
-  contract_id: string;
+  target_id: string;
 
   @ManyToOne(() => Product, (product) => product.contractItems, {
     eager: true,
@@ -33,4 +30,7 @@ export class ContractItem {
 
   @Column({ type: 'json', nullable: true })
   requirements_json: any;
+  
+  @Column()
+  version_id: number
 }

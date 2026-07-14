@@ -1,4 +1,4 @@
-export enum ContractScheduleStatus {
+export enum DeliveryStatus {
   SCHEDULED = 'SCHEDULED',
   SKIPPED = 'SKIPPED',
   ORDER_GENERATED = 'ORDER_GENERATED',

@@ -69,11 +69,7 @@ export class BatchController {
   }
 
   @MessagePattern({ cmd: 'get_product_stock_summary' })
-  async getProductStockSummary(@Payload() productId: string): Promise<{
-    totalStock: number;
-    activeBatches: Batch[];
-    expiringSoon: Batch[];
-  }> {
+  async getProductStockSummary(@Payload() productId: string): Promise<{totalStock: number; activeBatches: Batch[]; expiringSoon: Batch[];}> {
     return await this.batchService.getProductStockSummary(productId);
   }
 

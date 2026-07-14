@@ -9,6 +9,8 @@ import { ContractRepository } from '../repositories/impl/contract.repository';
 import { Contract } from '../entities/contract.entity';
 import { ContractVersion } from '../entities/contract-version.entity';
 import { ProposedBy } from '../enums/proposed-by.enum';
+import { DeliveryRepository } from '../repositories/impl/delivery.repository';
+import { TargetType } from '../enums/target-type.enum';
 
 @Injectable()
 export class ContractVersionService {
@@ -16,27 +18,28 @@ export class ContractVersionService {
         private readonly contractRepository: ContractRepository,
         private readonly contractVersionRepository: ContractVersionRepository,
         private readonly contractItemRepository: ContractItemRepository,
+        private readonly deliveryRepository: DeliveryRepository,
     ) { }
 
     // propose new version
     async proposeVersion(proposeDto: ProposeVersionDto): Promise<ContractVersionResponseDto> {
-        const { contract_id, proposed_by, terms_json_snapshot } = proposeDto;
+        const { target_type, target_id, proposed_by, terms_json_snapshot } = proposeDto;
 
-        const contract = await this.contractRepository.findById(contract_id);
+        const contract = await this.contractRepository.findById(target_id);
         if (!contract) {
             throw new RpcException({
                 status: 404,
-                message: `Contract not found: ${contract_id}`
+                message: `Contract not found: ${target_id}`
             });
         }
 
         // Validate that contract is in a state that allows proposing a new version
         this.validateContractForVersioning(contract);
-        const nextVersionNumber = await this.contractVersionRepository.getNextVersionNumber(contract_id);
+        const nextVersionNumber = await this.contractVersionRepository.getNextVersionNumber(target_type, target_id);
 
         // Create new version entry
         const newVersion = await this.contractVersionRepository.create({
-            contract_id,
+            target_id,
             version_number: nextVersionNumber,
             proposed_by,
             terms_json_snapshot
@@ -44,11 +47,11 @@ export class ContractVersionService {
 
         // update contract status to negotiation if it was draft
         if (contract.status === ContractStatus.DRAFT) {
-            await this.contractRepository.updateStatus(contract_id, ContractStatus.NEGOTIATION);
+            await this.contractRepository.updateStatus(target_id, ContractStatus.NEGOTIATION);
         }
 
         // Increment the contract's version
-        await this.incrementContractVersion(contract_id, contract.version);
+        await this.incrementContractVersion(target_id, contract.version);
 
         return this.mapToVersionResponseDto(newVersion, ProposalStatus.PROPOSED);
     }
@@ -62,7 +65,7 @@ export class ContractVersionService {
                 message: `Contract not found: ${contractId}`
             });
         }
-        const version = await this.contractVersionRepository.findVersionByNumber(contractId, versionNumber);
+        const version = await this.contractVersionRepository.findVersionByNumber(TargetType.CONTRACT, contractId, versionNumber);
         if (!version) {
             throw new RpcException({
                 status: 404,
@@ -70,7 +73,7 @@ export class ContractVersionService {
             });
         }
 
-        const latestVersion = await this.contractVersionRepository.findLatestVersion(contractId);
+        const latestVersion = await this.contractVersionRepository.findLatestVersion(TargetType.CONTRACT,contractId);
         if (!latestVersion || latestVersion.version_number !== versionNumber) {
             throw new RpcException({
                 status: 400,
@@ -94,7 +97,7 @@ export class ContractVersionService {
             });
         }
 
-        const version = await this.contractVersionRepository.findVersionByNumber(contractId, versionNumber);
+        const version = await this.contractVersionRepository.findVersionByNumber(TargetType.CONTRACT, contractId, versionNumber);
         if (!version) {
             throw new RpcException({
                 status: 404,
@@ -102,7 +105,7 @@ export class ContractVersionService {
             });
         }
 
-        const latestVersion = await this.contractVersionRepository.findLatestVersion(contractId);
+        const latestVersion = await this.contractVersionRepository.findLatestVersion(TargetType.CONTRACT, contractId);
         if (!latestVersion || latestVersion.version_number !== versionNumber) {
             throw new RpcException({
                 status: 400,
@@ -111,7 +114,7 @@ export class ContractVersionService {
         }
 
         if (versionNumber > 1) {
-            const previousVersion = await this.contractVersionRepository.findVersionByNumber(contractId, versionNumber - 1);
+            const previousVersion = await this.contractVersionRepository.findVersionByNumber(TargetType.CONTRACT, contractId, versionNumber - 1);
             if (previousVersion) {
                 await this.applyVersionChanges(contractId, previousVersion.terms_json_snapshot);
             }
@@ -134,9 +137,9 @@ export class ContractVersionService {
             });
         }
 
-        const versions = await this.contractVersionRepository.getVersionHistory(contractId);
+        const versions = await this.contractVersionRepository.getVersionHistory(TargetType.CONTRACT, contractId);
 
-        const latestVersion = await this.contractVersionRepository.findLatestVersion(contractId);
+        const latestVersion = await this.contractVersionRepository.findLatestVersion(TargetType.CONTRACT, contractId);
 
         const versionsWithStatus = versions.map(version => {
             let status = ProposalStatus.PROPOSED;
@@ -152,7 +155,8 @@ export class ContractVersionService {
         });
 
         return {
-            contract_id: contractId,
+            target_type: TargetType.CONTRACT,
+            target_id: contractId,
             current_version: contract.version,
             versions: versionsWithStatus
         };
@@ -160,8 +164,8 @@ export class ContractVersionService {
 
     // compare versions
     async compareVersions(contractId: string, versionA: number, versionB: number): Promise<VersionComparisonDto> {
-        const version1 = await this.contractVersionRepository.findVersionByNumber(contractId, versionA);
-        const version2 = await this.contractVersionRepository.findVersionByNumber(contractId, versionB);
+        const version1 = await this.contractVersionRepository.findVersionByNumber(TargetType.CONTRACT, contractId, versionA);
+        const version2 = await this.contractVersionRepository.findVersionByNumber(TargetType.CONTRACT, contractId, versionB);
 
         if (!version1 || !version2) {
             throw new RpcException({
@@ -229,7 +233,7 @@ export class ContractVersionService {
             }
 
             if (snapshot.items && Array.isArray(snapshot.items)) {
-                await this.contractItemRepository.deleteByContractId(contractId);
+                await this.contractItemRepository.deleteByTargetId(TargetType.CONTRACT, contractId);
                 await this.contractItemRepository.createMany(
                     snapshot.items.map((item: any) => ({
                         contract_id: contractId,
@@ -312,7 +316,8 @@ private compareItems(itemsA: any[], itemsB: any[]): any[] {
     private mapToVersionResponseDto(version: ContractVersion, status: ProposalStatus): ContractVersionResponseDto {
         return {
             contract_version_id: version.contract_version_id,
-            contract_id: version.contract_id,
+            target_type: TargetType.CONTRACT,
+            target_id: version.target_id,
             version_number: version.version_number,
             proposed_by: version.proposed_by as ProposedBy,
             terms_json_snapshot: version.terms_json_snapshot,

@@ -123,7 +123,7 @@ export class BatchService {
             return;
         }
 
-        await this.repo.executeInTransaction(async () => {
+        await this.repo.executeInTransaction(async () => { //?
             for (const batch of activeBatches) {
                 const oldQuantity = batch.currentQuantity;
 

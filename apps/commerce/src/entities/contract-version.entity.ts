@@ -1,19 +1,11 @@
+import { TargetType } from '../enums/target-type.enum';
+import { VersionStatus } from '../enums/version-status.enum';
 import {Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn} from 'typeorm';
-import { Contract } from './contract.entity';
 
 @Entity('contract_versions')
 export class ContractVersion {
   @PrimaryGeneratedColumn()
   contract_version_id: number;
-
-  @ManyToOne(() => Contract, (contract) => contract.versions, {
-    onDelete: 'CASCADE',
-  })
-  @JoinColumn({ name: 'contract_id' })
-  contract: Contract;
-
-  @Column()
-  contract_id: string;
 
   @Column('int')
   version_number: number;
@@ -21,9 +13,22 @@ export class ContractVersion {
   @Column()
   proposed_by: string;
 
-  @Column({ type: 'json' })
-  terms_json_snapshot: any;
+  @Column({ type: 'json', nullable: true})
+  terms_json_snapshot?: any;
+
+  @Column({ type: 'json', nullable: true })
+  change_reason?: string;
 
   @CreateDateColumn()
   created_at: Date;
+
+  @Column({type: 'enum', enum: TargetType})
+  target_type: TargetType;
+
+  @Column()
+  target_id: string;
+
+  @Column({type: 'enum', enum: VersionStatus, default: VersionStatus.PROPOSED})
+  status: VersionStatus;
+
 }

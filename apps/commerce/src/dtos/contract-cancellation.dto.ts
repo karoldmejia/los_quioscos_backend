@@ -3,9 +3,9 @@ import { PenaltyType } from '../enums/penalty-type.enum';
 import { ProposedBy } from '../enums/proposed-by.enum';
 
 
-export class CancelScheduleDto {
+export class CancelDeliveryDto {
     @IsUUID()
-    schedule_id: string;
+    delivery_id: string;
 
     @IsEnum(ProposedBy)
     cancelled_by: ProposedBy;
@@ -42,21 +42,11 @@ export class PauseContractDto {
     requested_by: ProposedBy;
 }
 
-export class PenaltyCalculationDto {
-    penalty_type: PenaltyType;
-    penalty_amount: number;
-    order_value?: number;
-    schedule_id?: string;
-    contract_id?: string;
-    reason: string;
-}
-
 export class CancellationResultDto {
     success: boolean;
     contract_id: string;
-    schedule_id?: string;
+    delivery_id?: string;
     new_status: string;
-    penalty?: PenaltyCalculationDto;
     error?: string;
 }
 

@@ -2,6 +2,7 @@ import { LogisticsMode } from '../enums/logistics-mode.enum';
 import { ContractStatus } from '../enums/contract-status.enum';
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
 import { ContractItem } from './contract-item.entity';
+import { Delivery } from './delivery.entity';
 import { ContractVersion } from './contract-version.entity';
 
 @Entity('contracts')
@@ -18,11 +19,7 @@ export class Contract {
     @Column({ type: 'uuid', nullable: true })
     transporter_id: string;
 
-    @Column({
-        type: 'enum',
-        enum: ContractStatus,
-        default: ContractStatus.DRAFT
-    })
+    @Column({type: 'enum', enum: ContractStatus, default: ContractStatus.DRAFT})
     status: ContractStatus;
 
     @Column({ type: 'date' })
@@ -72,8 +69,7 @@ export class Contract {
 
     @OneToMany(() => ContractItem, (item) => item.product)
     contractItems: ContractItem[];
-
-    @OneToMany(() => ContractVersion, v => v.contract, { cascade: true })
-    versions: ContractVersion[];
-    schedules: any;
+    
+    @OneToMany(() => Delivery, (delivery) => delivery.contract)
+    deliveries: Delivery[];
 }

@@ -35,7 +35,7 @@ export class OrderService {
   async createOrderWithItemsAndReserveStock(params: {orderData: Partial<Order>; itemsData: Partial<OrderItem>[]; expiresInMinutes?: number;}): Promise<Order> {
     const { orderData, itemsData, expiresInMinutes = 15 } = params;
 
-    const queryRunner = this.dataSource.createQueryRunner();
+    const queryRunner = this.dataSource.createQueryRunner(); //?
 
     await queryRunner.connect();
     await queryRunner.startTransaction();

@@ -1,31 +1,28 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ContractScheduleService } from '../contract-schedule.service';
 import { RpcException } from '@nestjs/microservices';
 import { ContractRepository } from '../../repositories/impl/contract.repository';
 import { ContractItemRepository } from '../../repositories/impl/contract-item.repository';
 import { ContractVersionRepository } from '../../repositories/impl/contract-version.repository';
-import { ContractScheduleRepository } from '../../repositories/impl/contract-schedule.repository';
-import { ContractScheduleVersionRepository } from '../../repositories/impl/contract-schedule-version.repository';
-import { ContractScheduleItemRepository } from '../../repositories/impl/contract-schedule-item.repository';
 import { Contract } from '../../entities/contract.entity';
 import { ContractStatus } from '../../enums/contract-status.enum';
-import { ContractScheduleStatus } from '../../enums/contract-schedule-status.enum';
-import { ContractScheduleVersionStatus } from '../../enums/contract-schedule-version-status.enum';
 import { ProposedBy } from '../../enums/proposed-by.enum';
 import { LogisticsMode } from '../../enums/logistics-mode.enum';
 import { OrderService } from '../order.service';
 import { Product } from '../../entities/product.entity';
 import { ProductCategory } from '../../enums/product-category.enum';
 import { UnitMeasure } from '../../enums/unit-measure.enum';
+import { DeliveryRepository } from 'src/repositories/impl/delivery.repository';
+import { DeliveryService } from '../delivery.service';
+import { VersionStatus } from 'src/enums/version-status.enum';
+import { DeliveryStatus } from 'src/enums/delivery-status.enum';
+import { TargetType } from 'src/enums/target-type.enum';
 
-describe('ContractScheduleService', () => {
-    let service: ContractScheduleService;
+describe('DeliveryService', () => {
+    let service: DeliveryService;
     let contractRepository: jest.Mocked<ContractRepository>;
     let contractItemRepository: jest.Mocked<ContractItemRepository>;
     let contractVersionRepository: jest.Mocked<ContractVersionRepository>;
-    let contractScheduleRepository: jest.Mocked<ContractScheduleRepository>;
-    let contractScheduleVersionRepository: jest.Mocked<ContractScheduleVersionRepository>;
-    let contractScheduleItemRepository: jest.Mocked<ContractScheduleItemRepository>;
+    let deliveryRepository: jest.Mocked<DeliveryRepository>;
     let ordersService: jest.Mocked<OrderService>;
 
     const mockProduct: Product = {
@@ -74,52 +71,58 @@ describe('ContractScheduleService', () => {
         parent_contract: null,
         child_contracts: [],
         contractItems: [],
-        versions: [],
-        schedules: [],
+        deliveries: [],
     };
 
     const scheduled_delivery_date = new Date();
     scheduled_delivery_date.setDate(scheduled_delivery_date.getDate() + 1);
 
-    const mockSchedule = {
-        contract_schedule_id: 'schedule-123',
+    const mockDelivery = {
+        delivery_id: 'delivery-123',
         contract_id: 'contract-123',
         scheduled_delivery_date: scheduled_delivery_date,
-        status: ContractScheduleStatus.SCHEDULED,
+        status: DeliveryStatus.SCHEDULED,
         created_at: new Date(),
         updated_at: new Date(),
         contract: mockContract as any,
         versions: [],
     };
 
-    const mockScheduleVersion = {
-        contract_schedule_version_id: 'version-123',
-        contract_schedule_id: 'schedule-123',
+    const mockDeliveryVersion = {
+        contract_version_id: 123,
+        target_type: TargetType.DELIVERY,
+        target_id: 'delivery-123',
         version_number: 1,
         proposed_by: ProposedBy.SYSTEM,
         change_reason: 'Initial schedule creation',
-        status: ContractScheduleVersionStatus.AUTO_APPLIED,
+        status: VersionStatus.AUTO_APPLIED,
         created_at: new Date(),
         updated_at: new Date(),
-        contract_schedule: mockSchedule as any,
+        contract_schedule: mockDelivery as any,
         items: [],
     };
 
-    const mockScheduleItem = {
-        contract_schedule_item_id: 'item-123',
-        contract_schedule_version_id: 'version-123',
+    const mockDeliveryItem = {
+        contract_item_id: 'item-123',
+        target_type: TargetType.DELIVERY,
+        target_id: 'delivery-123',
+        contract_version_id: 123,
         product_id: 'product-123',
         quantity: 10,
         unit_price: 100.50,
         requirements_json: { color: 'red' },
         created_at: new Date(),
         updated_at: new Date(),
-        contract_schedule_version: mockScheduleVersion as any,
+        contract_delivery_version: mockDeliveryVersion as any,
+        version_id: 1,
+        product: mockProduct as any,
+
     };
 
     const mockContractItem = {
         contract_item_id: 'contract-item-123',
-        contract_id: 'contract-123',
+        target_type: TargetType.CONTRACT,
+        target_id: 'contract-123',
         product_id: 'product-123',
         quantity: 10,
         unit_price: 100.50,
@@ -128,12 +131,13 @@ describe('ContractScheduleService', () => {
         updated_at: new Date(),
         product: mockProduct as any,
         contract: mockContract as any,
+        version_id: 0,
     };
 
     beforeEach(async () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
-                ContractScheduleService,
+                DeliveryService,
                 {
                     provide: ContractRepository,
                     useValue: {
@@ -149,40 +153,30 @@ describe('ContractScheduleService', () => {
                 {
                     provide: ContractItemRepository,
                     useValue: {
-                        findByContractId: jest.fn(),
+                        findByTargetId: jest.fn(),
                         cloneItemsFromContract: jest.fn(),
+                        findByVersionId: jest.fn(),
+                        createMany: jest.fn(),
+                        cloneItems: jest.fn(),
+                    },
+                },
+                {
+                    provide: DeliveryRepository,
+                    useValue: {
+                        findByContractId: jest.fn(),
+                        createMany: jest.fn(),
+                        findById: jest.fn(),
+                        findDeliveriesForOrderGeneration: jest.fn(),
+                        updateStatus: jest.fn(),
+                        findDeliveriesForDateRange: jest.fn(),
                     },
                 },
                 {
                     provide: ContractVersionRepository,
                     useValue: {
                         create: jest.fn(),
-                    },
-                },
-                {
-                    provide: ContractScheduleRepository,
-                    useValue: {
-                        findByContractId: jest.fn(),
-                        createMany: jest.fn(),
-                        findById: jest.fn(),
-                        findSchedulesForOrderGeneration: jest.fn(),
-                        updateStatus: jest.fn(),
-                        findSchedulesForDateRange: jest.fn(),
-                    },
-                },
-                {
-                    provide: ContractScheduleVersionRepository,
-                    useValue: {
-                        create: jest.fn(),
                         findAcceptedVersion: jest.fn(),
-                        findByScheduleId: jest.fn(),
-                    },
-                },
-                {
-                    provide: ContractScheduleItemRepository,
-                    useValue: {
-                        createMany: jest.fn(),
-                        findByVersionId: jest.fn(),
+                        findByTarget: jest.fn(),
                     },
                 },
                 {
@@ -194,38 +188,36 @@ describe('ContractScheduleService', () => {
             ],
         }).compile();
 
-        service = module.get<ContractScheduleService>(ContractScheduleService);
+        service = module.get<DeliveryService>(DeliveryService);
         contractRepository = module.get(ContractRepository);
         contractItemRepository = module.get(ContractItemRepository);
         contractVersionRepository = module.get(ContractVersionRepository);
-        contractScheduleRepository = module.get(ContractScheduleRepository);
-        contractScheduleVersionRepository = module.get(ContractScheduleVersionRepository);
-        contractScheduleItemRepository = module.get(ContractScheduleItemRepository);
+        deliveryRepository = module.get(DeliveryRepository);
         ordersService = module.get(OrderService);
     });
 
-    describe('generateSchedulesForContract', () => {
-        it('should generate new schedules for a contract', async () => {
+    describe('generateDeliveriesForContract', () => {
+        it('should generate new deliveries for a contract', async () => {
             contractRepository.findById.mockResolvedValue(mockContract);
-            contractScheduleRepository.findByContractId.mockResolvedValue([]);
-            contractScheduleRepository.createMany.mockResolvedValue([mockSchedule]);
-            contractScheduleVersionRepository.create.mockResolvedValue(mockScheduleVersion);
-            contractScheduleItemRepository.createMany.mockResolvedValue([mockScheduleItem]);
-            contractItemRepository.findByContractId.mockResolvedValue([mockContractItem]);
+            deliveryRepository.findByContractId.mockResolvedValue([]);
+            deliveryRepository.createMany.mockResolvedValue([mockDelivery]);
+            contractVersionRepository.create.mockResolvedValue(mockDeliveryVersion);
+            contractItemRepository.createMany.mockResolvedValue([mockDeliveryItem]);
+            contractItemRepository.findByTargetId.mockResolvedValue([mockContractItem]);
 
-            const result = await service.generateSchedulesForContract('contract-123');
+            const result = await service.generateDeliveriesForContract('contract-123');
 
             expect(result).toBe(1);
-            expect(contractScheduleRepository.createMany).toHaveBeenCalled();
-            expect(contractScheduleVersionRepository.create).toHaveBeenCalled();
-            expect(contractScheduleItemRepository.createMany).toHaveBeenCalled();
+            expect(deliveryRepository.createMany).toHaveBeenCalled();
+            expect(contractVersionRepository.create).toHaveBeenCalled();
+            expect(contractItemRepository.createMany).toHaveBeenCalled();
         });
 
         it('should throw error when contract not found', async () => {
             contractRepository.findById.mockResolvedValue(null);
 
-            await expect(service.generateSchedulesForContract('non-existent')).rejects.toThrow(RpcException);
-            await expect(service.generateSchedulesForContract('non-existent')).rejects.toMatchObject({
+            await expect(service.generateDeliveriesForContract('non-existent')).rejects.toThrow(RpcException);
+            await expect(service.generateDeliveriesForContract('non-existent')).rejects.toMatchObject({
                 message: 'Contract not found: non-existent',
             });
         });
@@ -234,13 +226,13 @@ describe('ContractScheduleService', () => {
             const inactiveContract = { ...mockContract, status: ContractStatus.DRAFT };
             contractRepository.findById.mockResolvedValue(inactiveContract);
 
-            await expect(service.generateSchedulesForContract('contract-123')).rejects.toThrow(RpcException);
-            await expect(service.generateSchedulesForContract('contract-123')).rejects.toMatchObject({
+            await expect(service.generateDeliveriesForContract('contract-123')).rejects.toThrow(RpcException);
+            await expect(service.generateDeliveriesForContract('contract-123')).rejects.toMatchObject({
                 message: 'Contract is not active: contract-123',
             });
         });
 
-        it('should not create duplicate schedules', async () => {
+        it('should not create duplicate deliveries', async () => {
             contractRepository.findById.mockResolvedValue(mockContract);
 
             const requiredDates = service['calculateRequiredDates'](
@@ -253,28 +245,28 @@ describe('ContractScheduleService', () => {
                 return;
             }
 
-            const existingSchedule = {
-                ...mockSchedule,
+            const existingDelivery = {
+                ...mockDelivery,
                 scheduled_delivery_date: requiredDates[0]
             };
 
-            contractScheduleRepository.findByContractId.mockResolvedValue([existingSchedule]);
+            deliveryRepository.findByContractId.mockResolvedValue([existingDelivery]);
 
-            let createdSchedules: any[] = [];
-            contractScheduleRepository.createMany.mockImplementation((schedules) => {
-                createdSchedules = schedules;
+            let createdDeliveries: any[] = [];
+            deliveryRepository.createMany.mockImplementation((deliveries) => {
+                createdDeliveries = deliveries;
                 return Promise.resolve([]);
             });
 
-            await service.generateSchedulesForContract('contract-123');
+            await service.generateDeliveriesForContract('contract-123');
 
             const existingDateStr = requiredDates[0].toISOString().split('T')[0];
-            const hasExistingDate = createdSchedules.some(
+            const hasExistingDate = createdDeliveries.some(
                 schedule => schedule.scheduled_delivery_date.toISOString().split('T')[0] === existingDateStr
             );
             expect(hasExistingDate).toBe(false);
 
-            for (const schedule of createdSchedules) {
+            for (const schedule of createdDeliveries) {
                 const scheduleDateStr = schedule.scheduled_delivery_date.toISOString().split('T')[0];
                 const isInRequiredDates = requiredDates.some(
                     date => date.toISOString().split('T')[0] === scheduleDateStr
@@ -284,70 +276,70 @@ describe('ContractScheduleService', () => {
         });
     });
 
-    describe('generateSchedulesForAllContracts', () => {
-        it('should generate schedules for all active contracts', async () => {
+    describe('generateDeliveriesForAllContracts', () => {
+        it('should generate deliveries for all active contracts', async () => {
             contractRepository.findActiveContracts.mockResolvedValue([mockContract]);
-            jest.spyOn(service, 'generateSchedulesForContract').mockResolvedValue(5);
+            jest.spyOn(service, 'generateDeliveriesForContract').mockResolvedValue(5);
 
-            const result = await service.generateSchedulesForAllContracts();
+            const result = await service.generateDeliveriesForAllContracts();
 
             expect(result.contracts_processed).toBe(1);
-            expect(result.schedules_created).toBe(5);
+            expect(result.deliveries_created).toBe(5);
         });
 
         it('should handle errors for individual contracts', async () => {
             contractRepository.findActiveContracts.mockResolvedValue([mockContract]);
-            jest.spyOn(service, 'generateSchedulesForContract').mockRejectedValue(new Error('Test error'));
+            jest.spyOn(service, 'generateDeliveriesForContract').mockRejectedValue(new Error('Test error'));
 
-            const result = await service.generateSchedulesForAllContracts();
+            const result = await service.generateDeliveriesForAllContracts();
 
             expect(result.contracts_processed).toBe(1);
-            expect(result.schedules_created).toBe(0);
+            expect(result.deliveries_created).toBe(0);
         });
 
         it('should handle empty active contracts list', async () => {
             contractRepository.findActiveContracts.mockResolvedValue([]);
 
-            const result = await service.generateSchedulesForAllContracts();
+            const result = await service.generateDeliveriesForAllContracts();
 
             expect(result.contracts_processed).toBe(0);
-            expect(result.schedules_created).toBe(0);
+            expect(result.deliveries_created).toBe(0);
         });
     });
 
-    describe('getItemsForSchedule', () => {
+    describe('getItemsForDelivery', () => {
         it('should return accepted version items when available', async () => {
-            contractScheduleVersionRepository.findAcceptedVersion.mockResolvedValue(mockScheduleVersion);
-            contractScheduleItemRepository.findByVersionId.mockResolvedValue([mockScheduleItem]);
+            contractVersionRepository.findAcceptedVersion.mockResolvedValue(mockDeliveryVersion);
+            contractItemRepository.findByVersionId.mockResolvedValue([mockDeliveryItem]);
 
-            const result = await service.getItemsForSchedule('schedule-123');
+            const result = await service.getItemsForDelivery('delivery-123');
 
-            expect(result.source).toBe('schedule_version');
+            expect(result.source).toBe('delivery_version');
             expect(result.version_number).toBe(1);
             expect(result.items).toHaveLength(1);
         });
 
         it('should return auto-applied version when no accepted version', async () => {
-            contractScheduleVersionRepository.findAcceptedVersion.mockResolvedValue(null);
-            contractScheduleVersionRepository.findByScheduleId.mockResolvedValue([{
-                ...mockScheduleVersion,
-                status: ContractScheduleVersionStatus.AUTO_APPLIED
+            contractVersionRepository.findAcceptedVersion.mockResolvedValue(null);
+            contractVersionRepository.findByTarget.mockResolvedValue([{
+                ...mockDeliveryVersion,
+                status: VersionStatus.AUTO_APPLIED
             }]);
-            contractScheduleItemRepository.findByVersionId.mockResolvedValue([mockScheduleItem]);
+            contractItemRepository.findByVersionId.mockResolvedValue([mockDeliveryItem]);
 
-            const result = await service.getItemsForSchedule('schedule-123');
+            const result = await service.getItemsForDelivery('delivery-123');
 
-            expect(result.source).toBe('schedule_version');
+            expect(result.source).toBe('delivery_version');
             expect(result.version_number).toBe(1);
         });
 
         it('should return contract items when no schedule versions exist', async () => {
-            contractScheduleVersionRepository.findAcceptedVersion.mockResolvedValue(null);
-            contractScheduleVersionRepository.findByScheduleId.mockResolvedValue([]);
-            contractScheduleRepository.findById.mockResolvedValue(mockSchedule);
-            contractItemRepository.findByContractId.mockResolvedValue([mockContractItem]);
+            contractVersionRepository.findAcceptedVersion.mockResolvedValue(null);
+            contractVersionRepository.findByTarget.mockResolvedValue([]);
+            deliveryRepository.findById.mockResolvedValue(mockDelivery);
+            contractItemRepository.findByTargetId.mockResolvedValue([mockContractItem]);
 
-            const result = await service.getItemsForSchedule('schedule-123');
+            const result = await service.getItemsForDelivery('delivery-123');
 
             expect(result.source).toBe('contract');
             expect(result.version_number).toBe(0);
@@ -355,147 +347,147 @@ describe('ContractScheduleService', () => {
         });
 
         it('should throw error when schedule not found', async () => {
-            contractScheduleVersionRepository.findAcceptedVersion.mockResolvedValue(null);
-            contractScheduleVersionRepository.findByScheduleId.mockResolvedValue([]);
-            contractScheduleRepository.findById.mockResolvedValue(null);
+            contractVersionRepository.findAcceptedVersion.mockResolvedValue(null);
+            contractVersionRepository.findByTarget.mockResolvedValue([]);
+            deliveryRepository.findById.mockResolvedValue(null);
 
-            await expect(service.getItemsForSchedule('schedule-123')).rejects.toThrow('Schedule not found');
+            await expect(service.getItemsForDelivery('delivery-123')).rejects.toThrow('Delivery not found');
         });
     });
 
-    describe('generateOrdersForUpcomingSchedules', () => {
-        it('should generate orders for upcoming schedules', async () => {
-            contractScheduleRepository.findSchedulesForOrderGeneration.mockResolvedValue([mockSchedule]);
+    describe('generateOrdersForUpcomingDeliveries', () => {
+        it('should generate orders for upcoming deliveries', async () => {
+            deliveryRepository.findDeliveriesForOrderGeneration.mockResolvedValue([mockDelivery]);
             contractRepository.findById.mockResolvedValue(mockContract);
-            jest.spyOn(service, 'generateOrderForSchedule').mockResolvedValue({
+            jest.spyOn(service, 'generateOrderForDelivery').mockResolvedValue({
                 success: true,
-                schedule_id: 'schedule-123',
+                delivery_id: 'delivery-123',
                 order_id: 'order-123'
             });
-            contractScheduleRepository.updateStatus.mockResolvedValue(undefined);
+            deliveryRepository.updateStatus.mockResolvedValue(undefined);
 
-            const results = await service.generateOrdersForUpcomingSchedules();
+            const results = await service.generateOrdersForUpcomingDeliveries();
 
             expect(results).toHaveLength(1);
             expect(results[0].success).toBe(true);
-            expect(contractScheduleRepository.updateStatus).toHaveBeenCalledWith(
-                'schedule-123',
-                ContractScheduleStatus.ORDER_GENERATED
+            expect(deliveryRepository.updateStatus).toHaveBeenCalledWith(
+                'delivery-123',
+                DeliveryStatus.ORDER_GENERATED
             );
         });
 
         it('should skip when contract is not active', async () => {
-            contractScheduleRepository.findSchedulesForOrderGeneration.mockResolvedValue([mockSchedule]);
+            deliveryRepository.findDeliveriesForOrderGeneration.mockResolvedValue([mockDelivery]);
             contractRepository.findById.mockResolvedValue({ ...mockContract, status: ContractStatus.DRAFT });
-            contractScheduleRepository.updateStatus.mockResolvedValue(undefined);
+            deliveryRepository.updateStatus.mockResolvedValue(undefined);
 
-            const results = await service.generateOrdersForUpcomingSchedules();
+            const results = await service.generateOrdersForUpcomingDeliveries();
 
             expect(results[0].success).toBe(false);
             expect(results[0].error).toBe('Contract is not active');
-            expect(contractScheduleRepository.updateStatus).toHaveBeenCalledWith(
-                'schedule-123',
-                ContractScheduleStatus.CANCELLED
+            expect(deliveryRepository.updateStatus).toHaveBeenCalledWith(
+                'delivery-123',
+                DeliveryStatus.CANCELLED
             );
         });
 
         it('should handle errors during order generation', async () => {
-            contractScheduleRepository.findSchedulesForOrderGeneration.mockResolvedValue([mockSchedule]);
+            deliveryRepository.findDeliveriesForOrderGeneration.mockResolvedValue([mockDelivery]);
             contractRepository.findById.mockResolvedValue(mockContract);
-            jest.spyOn(service, 'generateOrderForSchedule').mockRejectedValue(new Error('Order failed'));
+            jest.spyOn(service, 'generateOrderForDelivery').mockRejectedValue(new Error('Order failed'));
 
-            const results = await service.generateOrdersForUpcomingSchedules();
+            const results = await service.generateOrdersForUpcomingDeliveries();
 
             expect(results[0].success).toBe(false);
             expect(results[0].error).toBe('Order failed');
         });
 
-        it('should handle no schedules found', async () => {
-            contractScheduleRepository.findSchedulesForOrderGeneration.mockResolvedValue([]);
+        it('should handle no deliveries found', async () => {
+            deliveryRepository.findDeliveriesForOrderGeneration.mockResolvedValue([]);
 
-            const results = await service.generateOrdersForUpcomingSchedules();
+            const results = await service.generateOrdersForUpcomingDeliveries();
 
             expect(results).toHaveLength(0);
         });
     });
 
-    describe('generateOrderForScheduleId', () => {
+    describe('generateOrderForDeliveryId', () => {
         it('should generate order for valid schedule', async () => {
-            contractScheduleRepository.findById.mockResolvedValue(mockSchedule);
-            jest.spyOn(service, 'generateOrderForSchedule').mockResolvedValue({
+            deliveryRepository.findById.mockResolvedValue(mockDelivery);
+            jest.spyOn(service, 'generateOrderForDelivery').mockResolvedValue({
                 success: true,
-                schedule_id: 'schedule-123',
+                delivery_id: 'delivery-123',
                 order_id: 'order-123'
             });
 
-            const result = await service.generateOrderForScheduleId('schedule-123');
+            const result = await service.generateOrderForDeliveryId('delivery-123');
 
             expect(result.success).toBe(true);
             expect(result.order_id).toBe('order-123');
         });
 
         it('should return error when schedule not found', async () => {
-            contractScheduleRepository.findById.mockResolvedValue(null);
+            deliveryRepository.findById.mockResolvedValue(null);
 
-            const result = await service.generateOrderForScheduleId('non-existent');
+            const result = await service.generateOrderForDeliveryId('non-existent');
 
             expect(result.success).toBe(false);
-            expect(result.error).toBe('Schedule not found');
+            expect(result.error).toBe('Delivery not found');
         });
     });
 
-    describe('markSchedulesAsSkipped', () => {
-        it('should mark schedules as skipped for date range', async () => {
+    describe('markDeliveriesAsSkipped', () => {
+        it('should mark deliveries as skipped for date range', async () => {
             const startDate = new Date('2024-01-01');
             const endDate = new Date('2024-01-31');
-            contractScheduleRepository.findSchedulesForDateRange.mockResolvedValue([mockSchedule]);
-            contractScheduleRepository.updateStatus.mockResolvedValue(undefined);
+            deliveryRepository.findDeliveriesForDateRange.mockResolvedValue([mockDelivery]);
+            deliveryRepository.updateStatus.mockResolvedValue(undefined);
 
-            const result = await service.markSchedulesAsSkipped('contract-123', startDate, endDate);
+            const result = await service.markDeliveriesAsSkipped('contract-123', startDate, endDate);
 
             expect(result).toBe(1);
-            expect(contractScheduleRepository.updateStatus).toHaveBeenCalledWith(
-                'schedule-123',
-                ContractScheduleStatus.SKIPPED
+            expect(deliveryRepository.updateStatus).toHaveBeenCalledWith(
+                'delivery-123',
+                DeliveryStatus.SKIPPED
             );
         });
 
-        it('should skip only SCHEDULED status schedules', async () => {
+        it('should skip only SCHEDULED status deliveries', async () => {
             const startDate = new Date('2024-01-01');
             const endDate = new Date('2024-01-31');
-            const alreadyProcessedSchedule = {
-                ...mockSchedule,
-                status: ContractScheduleStatus.ORDER_GENERATED
+            const alreadyProcessedDelivery = {
+                ...mockDelivery,
+                status: DeliveryStatus.ORDER_GENERATED
             };
-            contractScheduleRepository.findSchedulesForDateRange.mockResolvedValue([
-                mockSchedule,
-                alreadyProcessedSchedule
+            deliveryRepository.findDeliveriesForDateRange.mockResolvedValue([
+                mockDelivery,
+                alreadyProcessedDelivery
             ]);
-            contractScheduleRepository.updateStatus.mockResolvedValue(undefined);
+            deliveryRepository.updateStatus.mockResolvedValue(undefined);
 
-            const result = await service.markSchedulesAsSkipped('contract-123', startDate, endDate);
+            const result = await service.markDeliveriesAsSkipped('contract-123', startDate, endDate);
 
             expect(result).toBe(1);
-            expect(contractScheduleRepository.updateStatus).toHaveBeenCalledTimes(1);
+            expect(deliveryRepository.updateStatus).toHaveBeenCalledTimes(1);
         });
     });
 
     describe('runFullGenerationProcess', () => {
         it('should run full generation process successfully', async () => {
-            jest.spyOn(service, 'generateSchedulesForAllContracts').mockResolvedValue({
+            jest.spyOn(service, 'generateDeliveriesForAllContracts').mockResolvedValue({
                 contracts_processed: 5,
-                schedules_created: 10
+                deliveries_created: 10
             });
-            jest.spyOn(service, 'generateOrdersForUpcomingSchedules').mockResolvedValue([
-                { success: true, schedule_id: '1', order_id: 'order-1' },
-                { success: true, schedule_id: '2', order_id: 'order-2' },
-                { success: false, schedule_id: '3', error: 'Failed' }
+            jest.spyOn(service, 'generateOrdersForUpcomingDeliveries').mockResolvedValue([
+                { success: true, delivery_id: '1', order_id: 'order-1' },
+                { success: true, delivery_id: '2', order_id: 'order-2' },
+                { success: false, delivery_id: '3', error: 'Failed' }
             ]);
 
             const result = await service.runFullGenerationProcess();
 
             expect(result.contracts_processed).toBe(5);
-            expect(result.schedules_created).toBe(10);
+            expect(result.deliveries_created).toBe(10);
             expect(result.orders_generated).toBe(2);
             expect(result.errors).toHaveLength(1);
         });
@@ -567,13 +559,15 @@ describe('ContractScheduleService', () => {
 
         describe('autoRenewContract', () => {
             it('should auto-renew eligible contract', async () => {
-                const newContract = { ...mockContract, contract_id: 'new-contract' };
+                const endDate = new Date();
+                endDate.setDate(endDate.getDate() + 15)
+
+                const newContract = { ...mockContract, contract_id: 'new-contract', end_date: endDate, status: ContractStatus.ACTIVE };
                 contractRepository.findById
-                    .mockResolvedValueOnce(mockContract)
                     .mockResolvedValueOnce(newContract);
-                contractItemRepository.findByContractId.mockResolvedValue([mockContractItem]);
+                contractItemRepository.findByTargetId.mockResolvedValue([mockContractItem]);
                 contractRepository.createContract.mockResolvedValue(newContract);
-                contractItemRepository.cloneItemsFromContract.mockResolvedValue(null as any);
+                contractItemRepository.cloneItems.mockResolvedValue(null as any);
                 contractVersionRepository.create.mockResolvedValue(null as any);
 
                 const result = await service.autoRenewContract('contract-123');

@@ -1,4 +1,4 @@
-export enum ContractScheduleVersionStatus {
+export enum VersionStatus {
   PROPOSED = 'PROPOSED',
   ACCEPTED = 'ACCEPTED',
   REJECTED = 'REJECTED',

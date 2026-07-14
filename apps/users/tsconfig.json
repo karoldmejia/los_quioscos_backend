@@ -25,6 +25,8 @@
       "src/*": [
         "src/*"
       ]
-    }
+    },
+    "strictPropertyInitialization": false,
+
   }
 }

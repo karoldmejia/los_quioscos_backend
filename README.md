@@ -82,7 +82,6 @@ Handles identity validation using **image processing and OCR pipelines**.
 * Automated order generation via scheduling
 * Rule-based cancellations and penalties
 
-
 #### Security & data integrity
 
 * Stateless authentication with JWT

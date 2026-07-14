@@ -13,18 +13,30 @@ import { LogisticsMode } from '../../enums/logistics-mode.enum';
 import { Product } from '../../entities/product.entity';
 import { UnitMeasure } from '../../enums/unit-measure.enum';
 import { ProductCategory } from '../../enums/product-category.enum';
+import { TargetType } from '../../enums/target-type.enum';
+import { VersionStatus } from '../../enums/version-status.enum';
+import { DeliveryRepository } from '../../repositories/impl/delivery.repository';
 
 describe('ContractVersionService', () => {
     let service: ContractVersionService;
     let contractRepository: jest.Mocked<ContractRepository>;
     let contractVersionRepository: jest.Mocked<ContractVersionRepository>;
     let contractItemRepository: jest.Mocked<ContractItemRepository>;
+    let deliveryRepository: jest.Mocked<DeliveryRepository>
 
     const now = new Date();
     const start_date = new Date(now);
     start_date.setDate(start_date.getDate() + 1);
     const end_date = new Date(now);
     end_date.setMonth(end_date.getMonth() + 1);
+
+        const mockDeliveryRepository = {
+        findById: jest.fn(),
+        findByContractId: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+        findPendingDeliveries: jest.fn(),
+        };
 
         const mockProduct: Product = {
             id: 'product-123',
@@ -66,13 +78,13 @@ describe('ContractVersionService', () => {
         parent_contract: null,
         child_contracts: [],
         contractItems: [],
-        versions: [],
-        schedules: [],
+        deliveries: [],
     };
 
     const mockContractVersion: ContractVersion = {
         contract_version_id: 123,
-        contract_id: 'contract-123',
+        target_type: TargetType.CONTRACT,
+        target_id: 'contract-123',
         version_number: 2,
         proposed_by: ProposedBy.BUSINESS,
         terms_json_snapshot: {
@@ -92,13 +104,14 @@ describe('ContractVersionService', () => {
             ]
         },
         created_at: new Date(),
-        contract: mockContract as any,
+        status: VersionStatus.PROPOSED,
     };
 
     const mockContractItems = [
         {
             contract_item_id: 'item-123',
-            contract_id: 'contract-123',
+            target_type: TargetType.CONTRACT,
+            target_id: 'contract-123',
             product_id: 'product-123',
             quantity: 10,
             unit_price: 100.50,
@@ -107,6 +120,7 @@ describe('ContractVersionService', () => {
             updated_at: new Date(),
             contract: mockContract as any,
             product: mockProduct as any,
+            version_id: 123,
         }
     ];
 
@@ -135,11 +149,15 @@ describe('ContractVersionService', () => {
                 {
                     provide: ContractItemRepository,
                     useValue: {
-                        deleteByContractId: jest.fn(),
+                        deleteByTargetId: jest.fn(),
                         createMany: jest.fn(),
                         findByContractId: jest.fn(),
                     },
                 },
+                {
+                    provide: DeliveryRepository,
+                    useValue: mockDeliveryRepository,
+                }
             ],
         }).compile();
 
@@ -151,7 +169,8 @@ describe('ContractVersionService', () => {
 
     describe('proposeVersion', () => {
         const proposeDto = {
-            contract_id: 'contract-123',
+            target_type: TargetType.CONTRACT,
+            target_id: 'contract-123',
             proposed_by: ProposedBy.BUSINESS,
             terms_json_snapshot: {
                 start_date: start_date,
@@ -234,14 +253,14 @@ describe('ContractVersionService', () => {
             contractVersionRepository.findVersionByNumber.mockResolvedValue(mockContractVersion);
             contractVersionRepository.findLatestVersion.mockResolvedValue(mockContractVersion);
             contractRepository.updateStatus.mockResolvedValue(undefined);
-            contractItemRepository.deleteByContractId.mockResolvedValue(undefined);
+            contractItemRepository.deleteByTargetId.mockResolvedValue(undefined);
             contractItemRepository.createMany.mockResolvedValue(mockContractItems);
 
             const result = await service.acceptVersion(contractId, versionNumber);
 
             expect(result.status).toBe(ProposalStatus.ACCEPTED);
             expect(contractRepository.updateStatus).toHaveBeenCalled();
-            expect(contractItemRepository.deleteByContractId).toHaveBeenCalled();
+            expect(contractItemRepository.deleteByTargetId).toHaveBeenCalled();
             expect(contractItemRepository.createMany).toHaveBeenCalled();
         });
 
@@ -251,7 +270,7 @@ describe('ContractVersionService', () => {
             contractVersionRepository.findVersionByNumber.mockResolvedValue(businessVersion);
             contractVersionRepository.findLatestVersion.mockResolvedValue(businessVersion);
             contractRepository.updateStatus.mockResolvedValue(undefined);
-            contractItemRepository.deleteByContractId.mockResolvedValue(undefined);
+            contractItemRepository.deleteByTargetId.mockResolvedValue(undefined);
             contractItemRepository.createMany.mockResolvedValue(mockContractItems);
 
             await service.acceptVersion(contractId, versionNumber);
@@ -265,7 +284,7 @@ describe('ContractVersionService', () => {
             contractVersionRepository.findVersionByNumber.mockResolvedValue(kioskVersion);
             contractVersionRepository.findLatestVersion.mockResolvedValue(kioskVersion);
             contractRepository.updateStatus.mockResolvedValue(undefined);
-            contractItemRepository.deleteByContractId.mockResolvedValue(undefined);
+            contractItemRepository.deleteByTargetId.mockResolvedValue(undefined);
             contractItemRepository.createMany.mockResolvedValue(mockContractItems);
 
             await service.acceptVersion(contractId, versionNumber);
@@ -328,12 +347,12 @@ describe('ContractVersionService', () => {
                 .mockResolvedValueOnce(mockContractVersion) // for version 2
                 .mockResolvedValueOnce(previousVersion); // for previous version
             contractVersionRepository.findLatestVersion.mockResolvedValue(mockContractVersion);
-            contractItemRepository.deleteByContractId.mockResolvedValue(undefined);
+            contractItemRepository.deleteByTargetId.mockResolvedValue(undefined);
             contractItemRepository.createMany.mockResolvedValue(mockContractItems);
 
             await service.rejectVersion(contractId, versionNumber);
 
-            expect(contractItemRepository.deleteByContractId).toHaveBeenCalled();
+            expect(contractItemRepository.deleteByTargetId).toHaveBeenCalled();
             expect(contractItemRepository.createMany).toHaveBeenCalled();
         });
 
@@ -395,7 +414,7 @@ describe('ContractVersionService', () => {
 
             const result = await service.getVersionHistory(contractId);
 
-            expect(result).toHaveProperty('contract_id', contractId);
+            expect(result).toHaveProperty('target_id', contractId);
             expect(result).toHaveProperty('current_version', 1);
             expect(result.versions).toHaveLength(1);
         });
@@ -494,7 +513,7 @@ describe('ContractVersionService', () => {
 
         it('should update contract items from snapshot', async () => {
             contractRepository.findById.mockResolvedValue(mockContract);
-            contractItemRepository.deleteByContractId.mockResolvedValue(undefined);
+            contractItemRepository.deleteByTargetId.mockResolvedValue(undefined);
             contractItemRepository.createMany.mockResolvedValue([]);
             
             const snapshot = {
@@ -510,7 +529,7 @@ describe('ContractVersionService', () => {
 
             await service['applyVersionChanges']('contract-123', snapshot);
 
-            expect(contractItemRepository.deleteByContractId).toHaveBeenCalledWith('contract-123');
+            expect(contractItemRepository.deleteByTargetId).toHaveBeenCalledWith(TargetType.CONTRACT, 'contract-123');
             expect(contractItemRepository.createMany).toHaveBeenCalled();
         });
     });

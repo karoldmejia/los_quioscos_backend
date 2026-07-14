@@ -11,7 +11,7 @@ import { ContractFilterDto } from '../dtos/contract-filter.dto';
 import { ContractItemResponseDto, CreateContractItemDto } from '../dtos/contract-item.dto';
 import { ContractActionDto } from '../dtos/contract-action.dto';
 import { ExpiringContractDto, RenewalNotificationDto, RenewalResultDto } from '../dtos/contract-renewal.dto';
-
+import { TargetType } from '../enums/target-type.enum';
 @Injectable()
 export class ContractService {
     private readonly logger = new Logger(ContractService.name);
@@ -63,7 +63,7 @@ export class ContractService {
             });
         }
 
-        const items = await this.contractItemRepository.findByContractId(contractId);
+        const items = await this.contractItemRepository.findByTargetId(TargetType.CONTRACT, contractId);
 
         return this.mapToResponseDto(contract, items);
     }
@@ -87,7 +87,7 @@ export class ContractService {
 
         const contractsWithItems = await Promise.all(
             contracts.map(async (contract) => {
-                const items = await this.contractItemRepository.findByContractId(contract.contract_id);
+                const items = await this.contractItemRepository.findByTargetId(TargetType.CONTRACT, contract.contract_id);
                 return this.mapToResponseDto(contract, items);
             })
         );
@@ -116,7 +116,7 @@ export class ContractService {
 
         await this.contractRepository.updateStatus(contractId, ContractStatus.ACTIVE);
         const updatedContract = await this.contractRepository.findById(contractId);
-        const items = await this.contractItemRepository.findByContractId(contractId);
+        const items = await this.contractItemRepository.findByTargetId(TargetType.CONTRACT, contractId);
 
         return this.mapToResponseDto(updatedContract, items);
     }
@@ -164,7 +164,7 @@ export class ContractService {
 
         await this.contractRepository.updateStatus(contractId, ContractStatus.EXPIRED);
         const updatedContract = await this.contractRepository.findById(contractId);
-        const items = await this.contractItemRepository.findByContractId(contractId);
+        const items = await this.contractItemRepository.findByTargetId(TargetType.CONTRACT, contractId);
 
         return this.mapToResponseDto(updatedContract, items);
     }
@@ -233,7 +233,7 @@ export class ContractService {
                 };
             }
 
-            const originalItems = await this.contractItemRepository.findByContractId(contractId);
+            const originalItems = await this.contractItemRepository.findByTargetId(TargetType.CONTRACT, contractId);
 
             const newStartDate = new Date(originalContract.end_date);
             newStartDate.setDate(newStartDate.getDate() + 1);
@@ -260,13 +260,16 @@ export class ContractService {
                 status: ContractStatus.DRAFT
             });
 
-            await this.contractItemRepository.cloneItemsFromContract(
+            await this.contractItemRepository.cloneItems(
+                TargetType.CONTRACT,
                 contractId,
+                TargetType.CONTRACT, 
                 newContract.contract_id
             );
 
             await this.contractVersionRepository.create({
-                contract_id: newContract.contract_id,
+                target_type: TargetType.CONTRACT, 
+                target_id: newContract.contract_id,
                 version_number: 1,
                 proposed_by: 'SYSTEM',
                 terms_json_snapshot: {

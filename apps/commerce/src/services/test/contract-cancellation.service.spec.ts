@@ -2,25 +2,24 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ContractCancellationService } from '../contract-cancellation.service';
 import { RpcException } from '@nestjs/microservices';
 import { ContractRepository } from '../../repositories/impl/contract.repository';
-import { ContractScheduleRepository } from '../../repositories/impl/contract-schedule.repository';
-import { ContractScheduleVersionRepository } from '../../repositories/impl/contract-schedule-version.repository';
 import { ContractItemRepository } from '../../repositories/impl/contract-item.repository';
-import { ContractScheduleStatus } from '../../enums/contract-schedule-status.enum';
 import { ContractStatus } from '../../enums/contract-status.enum';
-import { ContractScheduleVersionStatus } from '../../enums/contract-schedule-version-status.enum';
 import { ProposedBy } from '../../enums/proposed-by.enum';
 import { LogisticsMode } from '../../enums/logistics-mode.enum';
 import { Contract } from '../../entities/contract.entity';
-import { PenaltyService } from '../penalty.service';
+import { DeliveryRepository } from 'src/repositories/impl/delivery.repository';
+import { ContractVersionRepository } from 'src/repositories/impl/contract-version.repository';
+import { DeliveryStatus } from 'src/enums/delivery-status.enum';
 import { PenaltyType } from 'src/enums/penalty-type.enum';
+import { VersionStatus } from 'src/enums/version-status.enum';
+import { TargetType } from 'src/enums/target-type.enum';
 
 describe('ContractCancellationService', () => {
     let service: ContractCancellationService;
     let contractRepository: jest.Mocked<ContractRepository>;
-    let contractScheduleRepository: jest.Mocked<ContractScheduleRepository>;
-    let contractScheduleVersionRepository: jest.Mocked<ContractScheduleVersionRepository>;
+    let deliveryRepository: jest.Mocked<DeliveryRepository>;
+    let contractVersionRepository: jest.Mocked<ContractVersionRepository>;
     let contractItemRepository: jest.Mocked<ContractItemRepository>;
-    let penaltyService: jest.Mocked<PenaltyService>;
 
     const now = new Date();
     const start_date = new Date(now);
@@ -51,8 +50,7 @@ describe('ContractCancellationService', () => {
         parent_contract: null,
         child_contracts: [],
         contractItems: [],
-        versions: [],
-        schedules: [],
+        deliveries: [],
     };
 
     const mockPausedContract: Contract = {
@@ -62,27 +60,20 @@ describe('ContractCancellationService', () => {
         pause_end_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     };
 
-    const mockSchedule = {
-        contract_schedule_id: 'schedule-123',
+    const mockDelivery = {
+        delivery_id: 'delivery-123',
         contract_id: 'contract-123',
         scheduled_delivery_date: scheduled_delivery_date,
-        status: ContractScheduleStatus.SCHEDULED,
+        status: DeliveryStatus.SCHEDULED,
         created_at: new Date(),
         updated_at: new Date(),
         contract: mockContract as any,
         versions: []
     };
 
-    const mockOrderGeneratedSchedule = {
-        ...mockSchedule,
-        status: ContractScheduleStatus.ORDER_GENERATED,
-    };
-
-    const mockPenalty = {
-        penalty_amount: 100,
-        reason: 'Cancellation penalty',
-        days_in_advance: 5,
-        penalty_type: PenaltyType.FIFTY_PERCENT
+    const mockOrderGeneratedDelivery = {
+        ...mockDelivery,
+        status: DeliveryStatus.ORDER_GENERATED,
     };
 
     beforeEach(async () => {
@@ -98,16 +89,16 @@ describe('ContractCancellationService', () => {
                     },
                 },
                 {
-                    provide: ContractScheduleRepository,
+                    provide: DeliveryRepository,
                     useValue: {
                         findById: jest.fn(),
                         updateStatus: jest.fn(),
-                        findSchedulesForDateRange: jest.fn(),
+                        findDeliveriesForDateRange: jest.fn(),
                         findByContractId: jest.fn(),
                     },
                 },
                 {
-                    provide: ContractScheduleVersionRepository,
+                    provide: ContractVersionRepository,
                     useValue: {
                         getNextVersionNumber: jest.fn(),
                         create: jest.fn(),
@@ -117,74 +108,62 @@ describe('ContractCancellationService', () => {
                     provide: ContractItemRepository,
                     useValue: {},
                 },
-                {
-                    provide: PenaltyService,
-                    useValue: {
-                        calculateScheduleCancellationPenalty: jest.fn(),
-                        calculateContractCancellationPenalty: jest.fn(),
-                        shouldSuspendAccount: jest.fn(),
-                    },
-                },
             ],
         }).compile();
 
         service = module.get<ContractCancellationService>(ContractCancellationService);
         contractRepository = module.get(ContractRepository);
-        contractScheduleRepository = module.get(ContractScheduleRepository);
-        contractScheduleVersionRepository = module.get(ContractScheduleVersionRepository);
+        deliveryRepository = module.get(DeliveryRepository);
+        contractVersionRepository = module.get(ContractVersionRepository);
         contractItemRepository = module.get(ContractItemRepository);
-        penaltyService = module.get(PenaltyService);
     });
 
-    describe('cancelSchedule', () => {
+    describe('cancelDelivery', () => {
         const cancelDto = {
-            schedule_id: 'schedule-123',
+            delivery_id: 'delivery-123',
             cancelled_by: ProposedBy.BUSINESS,
             cancellation_date: new Date(),
         };
 
-        it('should cancel a schedule successfully', async () => {
-            contractScheduleRepository.findById.mockResolvedValue(mockSchedule);
+        it('should cancel a delivery successfully', async () => {
+            deliveryRepository.findById.mockResolvedValue(mockDelivery);
             contractRepository.findById.mockResolvedValue(mockContract);
-            penaltyService.calculateScheduleCancellationPenalty.mockResolvedValue(mockPenalty);
-            penaltyService.shouldSuspendAccount.mockReturnValue(false);
-            contractScheduleRepository.updateStatus.mockResolvedValue(undefined);
-            contractScheduleVersionRepository.getNextVersionNumber.mockResolvedValue(2);
-            contractScheduleVersionRepository.create.mockResolvedValue(null as any);
+            deliveryRepository.updateStatus.mockResolvedValue(undefined);
+            contractVersionRepository.getNextVersionNumber.mockResolvedValue(2);
+            contractVersionRepository.create.mockResolvedValue(null as any);
 
-            const result = await service.cancelSchedule(cancelDto);
+            const result = await service.cancelDelivery(cancelDto);
 
             expect(result.success).toBe(true);
-            expect(result.schedule_id).toBe('schedule-123');
-            expect(result.new_status).toBe(ContractScheduleStatus.CANCELLED);
-            expect(result.penalty).toEqual(mockPenalty);
-            expect(contractScheduleRepository.updateStatus).toHaveBeenCalledWith(
-                'schedule-123',
-                ContractScheduleStatus.CANCELLED
+            expect(result.delivery_id).toBe('delivery-123');
+            expect(result.new_status).toBe(DeliveryStatus.CANCELLED);
+            expect(deliveryRepository.updateStatus).toHaveBeenCalledWith(
+                'delivery-123',
+                DeliveryStatus.CANCELLED
             );
-            expect(contractScheduleVersionRepository.create).toHaveBeenCalled();
+            expect(contractVersionRepository.create).toHaveBeenCalled();
         });
 
-        it('should throw error when schedule not found', async () => {
-            contractScheduleRepository.findById.mockResolvedValue(null);
+        it('should throw error when delivery not found', async () => {
+            deliveryRepository.findById.mockResolvedValue(null);
 
             try {
-                await service.cancelSchedule(cancelDto);
+                await service.cancelDelivery(cancelDto);
                 fail('Expected RpcException to be thrown');
             } catch (error: any) {
                 expect(error.error.status).toBe(404);
-                expect(error.error.message).toBe('Schedule not found: schedule-123');
+                expect(error.error.message).toBe('Delivery not found: delivery-123');
             }
         });
 
         it('should throw error when contract not found', async () => {
-            contractScheduleRepository.findById.mockResolvedValue(mockSchedule);
+            deliveryRepository.findById.mockResolvedValue(mockDelivery);
             contractRepository.findById.mockResolvedValue(null);
 
-            await expect(service.cancelSchedule(cancelDto)).rejects.toThrow(RpcException);
-            await expect(service.cancelSchedule(cancelDto)).rejects.toMatchObject({
+            await expect(service.cancelDelivery(cancelDto)).rejects.toThrow(RpcException);
+            await expect(service.cancelDelivery(cancelDto)).rejects.toMatchObject({
                 error: {
-                    message: 'Contract not found for schedule: schedule-123',
+                    message: 'Contract not found for delivery: delivery-123',
                     status: 404,
                 }
             });
@@ -192,11 +171,11 @@ describe('ContractCancellationService', () => {
 
         it('should throw error when contract is not active', async () => {
             const inactiveContract = { ...mockContract, status: ContractStatus.DRAFT };
-            contractScheduleRepository.findById.mockResolvedValue(mockSchedule);
+            deliveryRepository.findById.mockResolvedValue(mockDelivery);
             contractRepository.findById.mockResolvedValue(inactiveContract);
 
-            await expect(service.cancelSchedule(cancelDto)).rejects.toThrow(RpcException);
-            await expect(service.cancelSchedule(cancelDto)).rejects.toMatchObject({
+            await expect(service.cancelDelivery(cancelDto)).rejects.toThrow(RpcException);
+            await expect(service.cancelDelivery(cancelDto)).rejects.toMatchObject({
                 error: {
                     message: 'Contract is not active. Current status: DRAFT',
                     status: 400,
@@ -204,50 +183,31 @@ describe('ContractCancellationService', () => {
             });
         });
 
-        it('should throw error when schedule cannot be cancelled', async () => {
-            const cancelledSchedule = { ...mockSchedule, status: ContractScheduleStatus.CANCELLED };
-            contractScheduleRepository.findById.mockResolvedValue(cancelledSchedule);
+        it('should throw error when delivery cannot be cancelled', async () => {
+            const cancelledDelivery = { ...mockDelivery, status: DeliveryStatus.CANCELLED };
+            deliveryRepository.findById.mockResolvedValue(cancelledDelivery);
             contractRepository.findById.mockResolvedValue(mockContract);
 
-            await expect(service.cancelSchedule(cancelDto)).rejects.toThrow(RpcException);
-            await expect(service.cancelSchedule(cancelDto)).rejects.toMatchObject({
+            await expect(service.cancelDelivery(cancelDto)).rejects.toThrow(RpcException);
+            await expect(service.cancelDelivery(cancelDto)).rejects.toMatchObject({
                 error: {
-                    message: 'Schedule cannot be cancelled. Current status: CANCELLED',
+                    message: 'Delivery cannot be cancelled. Current status: CANCELLED',
                     status: 400,
                 }
             });
         });
 
-        it('should handle schedule with ORDER_GENERATED status', async () => {
-            contractScheduleRepository.findById.mockResolvedValue(mockOrderGeneratedSchedule);
+        it('should handle delivery with ORDER_GENERATED status', async () => {
+            deliveryRepository.findById.mockResolvedValue(mockOrderGeneratedDelivery);
             contractRepository.findById.mockResolvedValue(mockContract);
-            penaltyService.calculateScheduleCancellationPenalty.mockResolvedValue(mockPenalty);
-            penaltyService.shouldSuspendAccount.mockReturnValue(false);
-            contractScheduleRepository.updateStatus.mockResolvedValue(undefined);
-            contractScheduleVersionRepository.getNextVersionNumber.mockResolvedValue(2);
-            contractScheduleVersionRepository.create.mockResolvedValue(null as any);
+            deliveryRepository.updateStatus.mockResolvedValue(undefined);
+            contractVersionRepository.getNextVersionNumber.mockResolvedValue(2);
+            contractVersionRepository.create.mockResolvedValue(null as any);
 
-            const result = await service.cancelSchedule(cancelDto);
+            const result = await service.cancelDelivery(cancelDto);
 
             expect(result.success).toBe(true);
-            expect(contractScheduleRepository.updateStatus).toHaveBeenCalled();
-        });
-
-        it('should handle account suspension when penalty is severe', async () => {
-            const severePenalty = { ...mockPenalty, penalty_amount: 1000 };
-            contractScheduleRepository.findById.mockResolvedValue(mockSchedule);
-            contractRepository.findById.mockResolvedValue(mockContract);
-            penaltyService.calculateScheduleCancellationPenalty.mockResolvedValue(severePenalty);
-            penaltyService.shouldSuspendAccount.mockReturnValue(true);
-            contractScheduleRepository.updateStatus.mockResolvedValue(undefined);
-            contractScheduleVersionRepository.getNextVersionNumber.mockResolvedValue(2);
-            contractScheduleVersionRepository.create.mockResolvedValue(null as any);
-
-            const result = await service.cancelSchedule(cancelDto);
-
-            expect(result.success).toBe(true);
-            // Verificar que se llamó a handleAccountSuspension (a través del log)
-            expect(penaltyService.shouldSuspendAccount).toHaveBeenCalledWith(severePenalty);
+            expect(deliveryRepository.updateStatus).toHaveBeenCalled();
         });
     });
 
@@ -261,8 +221,8 @@ describe('ContractCancellationService', () => {
 
         it('should pause a contract successfully', async () => {
             contractRepository.findById.mockResolvedValue(mockContract);
-            contractScheduleRepository.findSchedulesForDateRange.mockResolvedValue([mockSchedule]);
-            contractScheduleRepository.updateStatus.mockResolvedValue(undefined);
+            deliveryRepository.findDeliveriesForDateRange.mockResolvedValue([mockDelivery]);
+            deliveryRepository.updateStatus.mockResolvedValue(undefined);
             contractRepository.updateContract.mockResolvedValue(undefined);
 
             const result = await service.pauseContract(pauseDto);
@@ -335,23 +295,23 @@ describe('ContractCancellationService', () => {
             });
         });
 
-        it('should skip schedules in the pause date range', async () => {
-            const schedules = [
-                { ...mockSchedule, status: ContractScheduleStatus.SCHEDULED },
-                { ...mockSchedule, status: ContractScheduleStatus.ORDER_GENERATED, contract_schedule_id: 'schedule-456' },
-                { ...mockSchedule, status: ContractScheduleStatus.SCHEDULED, contract_schedule_id: 'schedule-789' },
+        it('should skip deliveries in the pause date range', async () => {
+            const deliveries = [
+                { ...mockDelivery, status: DeliveryStatus.SCHEDULED },
+                { ...mockDelivery, status: DeliveryStatus.ORDER_GENERATED, contract_delivery_id: 'delivery-456' },
+                { ...mockDelivery, status: DeliveryStatus.SCHEDULED, contract_delivery_id: 'delivery-789' },
             ];
 
             contractRepository.findById.mockResolvedValue(mockContract);
-            contractScheduleRepository.findSchedulesForDateRange.mockResolvedValue(schedules);
-            contractScheduleRepository.updateStatus.mockResolvedValue(undefined);
+            deliveryRepository.findDeliveriesForDateRange.mockResolvedValue(deliveries);
+            deliveryRepository.updateStatus.mockResolvedValue(undefined);
             contractRepository.updateContract.mockResolvedValue(undefined);
 
             const result = await service.pauseContract(pauseDto);
 
             expect(result.success).toBe(true);
-            // Only SCHEDULED schedules should be updated
-            expect(contractScheduleRepository.updateStatus).toHaveBeenCalledTimes(2);
+            // Only SCHEDULED deliveries should be updated
+            expect(deliveryRepository.updateStatus).toHaveBeenCalledTimes(2);
         });
     });
 
@@ -407,21 +367,19 @@ describe('ContractCancellationService', () => {
         };
 
         it('should cancel a contract successfully', async () => {
-            const futureSchedule = {
-                ...mockSchedule,
+            const futureDelivery = {
+                ...mockDelivery,
                 scheduled_delivery_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
             };
-            const pastSchedule = {
-                ...mockSchedule,
+            const pastDelivery = {
+                ...mockDelivery,
                 scheduled_delivery_date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-                contract_schedule_id: 'schedule-past',
+                contract_delivery_id: 'delivery-past',
             };
 
             contractRepository.findById.mockResolvedValue(mockContract);
-            contractScheduleRepository.findByContractId.mockResolvedValue([futureSchedule, pastSchedule]);
-            penaltyService.calculateContractCancellationPenalty.mockResolvedValue(mockPenalty);
-            penaltyService.shouldSuspendAccount.mockReturnValue(false);
-            contractScheduleRepository.updateStatus.mockResolvedValue(undefined);
+            deliveryRepository.findByContractId.mockResolvedValue([futureDelivery, pastDelivery]);
+            deliveryRepository.updateStatus.mockResolvedValue(undefined);
             contractRepository.updateStatus.mockResolvedValue(undefined);
 
             const result = await service.cancelContract(cancelDto);
@@ -429,9 +387,8 @@ describe('ContractCancellationService', () => {
             expect(result.success).toBe(true);
             expect(result.contract_id).toBe('contract-123');
             expect(result.new_status).toBe(ContractStatus.CANCELLED);
-            expect(result.penalty).toEqual(mockPenalty);
             expect(contractRepository.updateStatus).toHaveBeenCalledWith('contract-123', ContractStatus.CANCELLED);
-            expect(contractScheduleRepository.updateStatus).toHaveBeenCalledTimes(1);
+            expect(deliveryRepository.updateStatus).toHaveBeenCalledTimes(1);
         });
 
         it('should throw error when contract not found', async () => {
@@ -461,9 +418,7 @@ describe('ContractCancellationService', () => {
 
         it('should handle contract in PAUSED status', async () => {
             contractRepository.findById.mockResolvedValue(mockPausedContract);
-            contractScheduleRepository.findByContractId.mockResolvedValue([]);
-            penaltyService.calculateContractCancellationPenalty.mockResolvedValue(mockPenalty);
-            penaltyService.shouldSuspendAccount.mockReturnValue(false);
+            deliveryRepository.findByContractId.mockResolvedValue([]);
             contractRepository.updateStatus.mockResolvedValue(undefined);
 
             const result = await service.cancelContract(cancelDto);
@@ -471,37 +426,23 @@ describe('ContractCancellationService', () => {
             expect(result.success).toBe(true);
             expect(result.new_status).toBe(ContractStatus.CANCELLED);
         });
-
-        it('should handle account suspension when penalty is severe', async () => {
-            const severePenalty = { ...mockPenalty, penalty_amount: 1000 };
-            contractRepository.findById.mockResolvedValue(mockContract);
-            contractScheduleRepository.findByContractId.mockResolvedValue([]);
-            penaltyService.calculateContractCancellationPenalty.mockResolvedValue(severePenalty);
-            penaltyService.shouldSuspendAccount.mockReturnValue(true);
-            contractRepository.updateStatus.mockResolvedValue(undefined);
-
-            const result = await service.cancelContract(cancelDto);
-
-            expect(result.success).toBe(true);
-            expect(penaltyService.shouldSuspendAccount).toHaveBeenCalledWith(severePenalty);
-        });
     });
 
     describe('Helper Methods', () => {
         describe('getNextScheduledDelivery', () => {
-            it('should return the next scheduled delivery', async () => {
+            it('should return the next delivered delivery', async () => {
                 const today = new Date();
                 const tomorrow = new Date(today);
                 tomorrow.setDate(tomorrow.getDate() + 1);
                 const nextWeek = new Date(today);
                 nextWeek.setDate(nextWeek.getDate() + 7);
 
-                const schedules = [
-                    { ...mockSchedule, scheduled_delivery_date: tomorrow, status: ContractScheduleStatus.SCHEDULED },
-                    { ...mockSchedule, scheduled_delivery_date: nextWeek, status: ContractScheduleStatus.SCHEDULED, contract_schedule_id: 'schedule-2' },
+                const deliveries = [
+                    { ...mockDelivery, scheduled_delivery_date: tomorrow, status: DeliveryStatus.SCHEDULED },
+                    { ...mockDelivery, scheduled_delivery_date: nextWeek, status: DeliveryStatus.SCHEDULED, contract_delivery_id: 'delivery-2' },
                 ];
 
-                contractScheduleRepository.findByContractId.mockResolvedValue(schedules);
+                deliveryRepository.findByContractId.mockResolvedValue(deliveries);
 
                 const result = await service['getNextScheduledDelivery']('contract-123');
 
@@ -509,28 +450,28 @@ describe('ContractCancellationService', () => {
                 expect(result.scheduled_delivery_date).toBe(tomorrow);
             });
 
-            it('should return null when no future schedules exist', async () => {
+            it('should return null when no future deliveries exist', async () => {
                 const pastDate = new Date();
                 pastDate.setDate(pastDate.getDate() - 7);
-                const schedules = [
-                    { ...mockSchedule, scheduled_delivery_date: pastDate, status: ContractScheduleStatus.SCHEDULED },
+                const deliveries = [
+                    { ...mockDelivery, scheduled_delivery_date: pastDate, status: DeliveryStatus.SCHEDULED },
                 ];
 
-                contractScheduleRepository.findByContractId.mockResolvedValue(schedules);
+                deliveryRepository.findByContractId.mockResolvedValue(deliveries);
 
                 const result = await service['getNextScheduledDelivery']('contract-123');
 
                 expect(result).toBeNull();
             });
 
-            it('should ignore schedules that are not SCHEDULED', async () => {
+            it('should ignore deliveries that are not SCHEDULED', async () => {
                 const tomorrow = new Date();
                 tomorrow.setDate(tomorrow.getDate() + 1);
-                const schedules = [
-                    { ...mockSchedule, scheduled_delivery_date: tomorrow, status: ContractScheduleStatus.CANCELLED },
+                const deliveries = [
+                    { ...mockDelivery, scheduled_delivery_date: tomorrow, status: DeliveryStatus.CANCELLED },
                 ];
 
-                contractScheduleRepository.findByContractId.mockResolvedValue(schedules);
+                deliveryRepository.findByContractId.mockResolvedValue(deliveries);
 
                 const result = await service['getNextScheduledDelivery']('contract-123');
 
@@ -540,40 +481,41 @@ describe('ContractCancellationService', () => {
 
         describe('createCancellationVersion', () => {
             it('should create a cancellation version', async () => {
-                contractScheduleVersionRepository.getNextVersionNumber.mockResolvedValue(2);
-                contractScheduleVersionRepository.create.mockResolvedValue(null as any);
+                contractVersionRepository.getNextVersionNumber.mockResolvedValue(2);
+                contractVersionRepository.create.mockResolvedValue(null as any);
 
-                await service['createCancellationVersion']('schedule-123', ProposedBy.BUSINESS, mockPenalty);
+                await service['createCancellationVersion']('delivery-123', ProposedBy.BUSINESS);
 
-                expect(contractScheduleVersionRepository.getNextVersionNumber).toHaveBeenCalledWith('schedule-123');
-                expect(contractScheduleVersionRepository.create).toHaveBeenCalledWith({
-                    contract_schedule_id: 'schedule-123',
+                expect(contractVersionRepository.getNextVersionNumber).toHaveBeenCalledWith(TargetType.DELIVERY, 'delivery-123');
+                expect(contractVersionRepository.create).toHaveBeenCalledWith({
+                    target_type: 'DELIVERY',
+                    target_id: 'delivery-123',
                     version_number: 2,
                     proposed_by: ProposedBy.BUSINESS,
-                    change_reason: `Schedule cancelled. Penalty: $${mockPenalty.penalty_amount}`,
-                    status: ContractScheduleVersionStatus.AUTO_APPLIED,
+                    change_reason: `Delivery cancelled`,
+                    status: VersionStatus.AUTO_APPLIED,
                 });
             });
         });
 
-        describe('validateScheduleForCancellation', () => {
-            it('should validate schedule in SCHEDULED status', () => {
+        describe('validateDeliveryForCancellation', () => {
+            it('should validate delivery in SCHEDULED status', () => {
                 expect(() => {
-                    service['validateScheduleForCancellation'](mockSchedule, mockContract);
+                    service['validateDeliveryForCancellation'](mockDelivery, mockContract);
                 }).not.toThrow();
             });
 
-            it('should validate schedule in ORDER_GENERATED status', () => {
+            it('should validate delivery in ORDER_GENERATED status', () => {
                 expect(() => {
-                    service['validateScheduleForCancellation'](mockOrderGeneratedSchedule, mockContract);
+                    service['validateDeliveryForCancellation'](mockOrderGeneratedDelivery, mockContract);
                 }).not.toThrow();
             });
 
-            it('should throw error for invalid schedule status', () => {
-                const cancelledSchedule = { ...mockSchedule, status: ContractScheduleStatus.CANCELLED };
+            it('should throw error for invalid delivery status', () => {
+                const cancelledDelivery = { ...mockDelivery, status: DeliveryStatus.CANCELLED };
 
                 expect(() => {
-                    service['validateScheduleForCancellation'](cancelledSchedule, mockContract);
+                    service['validateDeliveryForCancellation'](cancelledDelivery, mockContract);
                 }).toThrow(RpcException);
             });
 
@@ -581,7 +523,7 @@ describe('ContractCancellationService', () => {
                 const inactiveContract = { ...mockContract, status: ContractStatus.DRAFT };
 
                 expect(() => {
-                    service['validateScheduleForCancellation'](mockSchedule, inactiveContract);
+                    service['validateDeliveryForCancellation'](mockDelivery, inactiveContract);
                 }).toThrow(RpcException);
             });
         });

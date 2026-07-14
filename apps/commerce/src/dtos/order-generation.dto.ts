@@ -17,7 +17,7 @@ export class OrderItemDto {
 
 export class GenerateOrderDto {
     @IsUUID()
-    contract_schedule_id: string;
+    delivery_id: string;
 
     @IsUUID()
     contract_id: string;
@@ -45,17 +45,17 @@ export class GenerateOrderDto {
 
 export class OrderGenerationResultDto {
     success: boolean;
-    schedule_id: string;
+    delivery_id: string;
     order_id?: string;
     error?: string;
 }
 
-export class ScheduleGenerationSummaryDto {
+export class DeliveryGenerationSummaryDto {
     contracts_processed: number;
-    schedules_created: number;
+    deliveries_created: number;
     orders_generated: number;
     errors: Array<{
-        schedule_id: string;
+        delivery_id: string;
         error: string;
     }>;
 }

@@ -1,194 +1,192 @@
 import { Injectable } from '@nestjs/common';
 import { RpcException } from '@nestjs/microservices';
 import { ContractRepository } from '../repositories/impl/contract.repository';
-import { ContractScheduleRepository } from '../repositories/impl/contract-schedule.repository';
-import { ContractScheduleVersionRepository } from '../repositories/impl/contract-schedule-version.repository';
-import { ContractScheduleItemRepository } from '../repositories/impl/contract-schedule-item.repository';
 import { ContractItemRepository } from '../repositories/impl/contract-item.repository';
-import { ProposeScheduleChangeDto, ContractScheduleVersionResponseDto, ContractScheduleVersionHistoryDto, ContractScheduleItemDto, ContractScheduleVersionComparisonDto } from '../dtos/contract-schedule.dto';
-import { ContractScheduleVersionStatus } from '../enums/contract-schedule-version-status.enum';
 import { ProposedBy } from '../enums/proposed-by.enum';
 import { ContractStatus } from '../enums/contract-status.enum';
-import { ContractScheduleStatus } from '../enums/contract-schedule-status.enum';
+import { DeliveryRepository } from '../repositories/impl/delivery.repository';
+import { ContractVersionRepository } from '../repositories/impl/contract-version.repository';
+import { DeliveryItemDto, DeliveryVersionComparisonDto, DeliveryVersionHistoryDto, DeliveryVersionResponseDto, ProposeDeliveryChangeDto } from '../dtos/delivery.dto';
+import { VersionStatus } from '../enums/version-status.enum';
+import { TargetType } from '../enums/target-type.enum';
+import { DeliveryStatus } from '../enums/delivery-status.enum';
 
 @Injectable()
-export class ContractScheduleVersionService {
+export class DeliveryVersionService {
     constructor(
         private readonly contractRepository: ContractRepository,
-        private readonly contractScheduleRepository: ContractScheduleRepository,
-        private readonly contractScheduleVersionRepository: ContractScheduleVersionRepository,
-        private readonly contractScheduleItemRepository: ContractScheduleItemRepository,
+        private readonly deliveryRepository: DeliveryRepository,
+        private readonly contractVersionRepository: ContractVersionRepository,
         private readonly contractItemRepository: ContractItemRepository,
     ) { }
 
-    // propose change on specific schedule
-    async proposeScheduleChange(proposeDto: ProposeScheduleChangeDto): Promise<ContractScheduleVersionResponseDto> {
-        const { contract_schedule_id, proposed_by, change_reason, items } = proposeDto;
+    // propose change on specific delivery
+    async proposeDeliveryChange(proposeDto: ProposeDeliveryChangeDto): Promise<DeliveryVersionResponseDto> {
+        const { delivery_id, proposed_by, change_reason, items } = proposeDto;
 
-        const schedule = await this.contractScheduleRepository.findById(contract_schedule_id);
-        if (!schedule) {
+        const delivery = await this.deliveryRepository.findById(delivery_id);
+        if (!delivery) {
             throw new RpcException({
                 status: 404,
-                message: `Contract schedule not found: ${contract_schedule_id}`
+                message: `Contract delivery not found: ${delivery_id}`
             });
         }
-        const contract = await this.contractRepository.findById(schedule.contract_id);
+        const contract = await this.contractRepository.findById(delivery.contract_id);
         if (!contract) {
             throw new RpcException({
                 status: 404,
-                message: `Contract not found for schedule: ${contract_schedule_id}`
+                message: `Contract not found for delivery: ${delivery_id}`
             });
         }
-        await this.validateScheduleForModification(schedule, contract, proposed_by);
-        const hasPending = await this.contractScheduleVersionRepository.hasPendingProposal(contract_schedule_id);
+        await this.validateDeliveryForModification(delivery, contract, proposed_by);
+        const hasPending = await this.contractVersionRepository.hasPendingProposal(TargetType.DELIVERY, delivery_id);
         if (hasPending) {
             throw new RpcException({
                 status: 400,
-                message: `There is already a pending proposal for this schedule`
+                message: `There is already a pending proposal for this delivery`
             });
         }
 
-        const nextVersionNumber = await this.contractScheduleVersionRepository.getNextVersionNumber(contract_schedule_id);
+        const nextVersionNumber = await this.contractVersionRepository.getNextVersionNumber(TargetType.DELIVERY, delivery_id);
 
-        const newVersion = await this.contractScheduleVersionRepository.create({
-            contract_schedule_id,
+        const newVersion = await this.contractVersionRepository.create({
+            target_type: TargetType.DELIVERY,
+            target_id: delivery_id,
             version_number: nextVersionNumber,
             proposed_by,
             change_reason,
-            status: ContractScheduleVersionStatus.PROPOSED
+            status: VersionStatus.PROPOSED
         });
 
         if (items && items.length > 0) {
             const versionItems = items.map(item => ({
-                contract_schedule_version_id: newVersion.contract_schedule_version_id,
+                version_id: newVersion.contract_version_id,
                 product_id: item.product_id,
                 quantity: item.quantity,
                 unit_price: item.unit_price,
                 requirements_json: item.requirements_json
             }));
-            await this.contractScheduleItemRepository.createMany(versionItems);
+            await this.contractItemRepository.createMany(versionItems);
         }
 
-        return await this.getScheduleVersionWithItems(newVersion.contract_schedule_version_id);
+        return await this.getDeliveryVersionWithItems(newVersion.contract_version_id);
     }
 
     // accept proposed change
-    async acceptScheduleChange(scheduleId: string, versionNumber: number): Promise<ContractScheduleVersionResponseDto> {
-        const schedule = await this.contractScheduleRepository.findById(scheduleId);
-        if (!schedule) {
+    async acceptDeliveryChange(deliveryId: string, versionNumber: number): Promise<DeliveryVersionResponseDto> {
+        const delivery = await this.deliveryRepository.findById(deliveryId);
+        if (!delivery) {
             throw new RpcException({
                 status: 404,
-                message: `Contract schedule not found: ${scheduleId}`
+                message: `Contract delivery not found: ${deliveryId}`
             });
         }
 
-        const versions = await this.contractScheduleVersionRepository.findByScheduleId(scheduleId);
+        const versions = await this.contractVersionRepository.findByTarget(TargetType.DELIVERY, deliveryId);
+
         const version = versions.find(v => v.version_number === versionNumber);
 
         if (!version) {
             throw new RpcException({
                 status: 404,
-                message: `Version ${versionNumber} not found for schedule ${scheduleId}`
+                message: `Version ${versionNumber} not found for delivery ${deliveryId}`
             });
         }
-        const latestVersion = await this.contractScheduleVersionRepository.findLatestVersion(scheduleId);
+        const latestVersion = await this.contractVersionRepository.findLatestVersion(TargetType.DELIVERY, deliveryId);
         if (!latestVersion || latestVersion.version_number !== versionNumber) {
             throw new RpcException({
                 status: 400,
                 message: `Only the latest version (${latestVersion?.version_number}) can be accepted/rejected`
             });
         }
-        if (version.status !== ContractScheduleVersionStatus.PROPOSED) {
+        if (version.status !== VersionStatus.PROPOSED) {
             throw new RpcException({
                 status: 400,
                 message: `Version is already ${version.status}`
             });
         }
-        await this.contractScheduleVersionRepository.updateStatus(
-            version.contract_schedule_version_id,
-            ContractScheduleVersionStatus.ACCEPTED
-        );
 
-        return await this.getScheduleVersionWithItems(version.contract_schedule_version_id);
+        await this.contractVersionRepository.updateStatus(TargetType.DELIVERY, deliveryId, version.contract_version_id, VersionStatus.ACCEPTED);
+
+        const updatedVersion = await this.contractVersionRepository.findById(version.contract_version_id);
+        return await this.getDeliveryVersionWithItems(version.contract_version_id);
     }
 
     // reject change proposal
-    async rejectScheduleChange(scheduleId: string, versionNumber: number): Promise<ContractScheduleVersionResponseDto> {
-        const schedule = await this.contractScheduleRepository.findById(scheduleId);
-        if (!schedule) {
+    async rejectDeliveryChange(deliveryId: string, versionNumber: number): Promise<DeliveryVersionResponseDto> {
+        const delivery = await this.deliveryRepository.findById(deliveryId);
+        if (!delivery) {
             throw new RpcException({
                 status: 404,
-                message: `Contract schedule not found: ${scheduleId}`
+                message: `Contract delivery not found: ${deliveryId}`
             });
         }
-        const versions = await this.contractScheduleVersionRepository.findByScheduleId(scheduleId);
+        const versions = await this.contractVersionRepository.findByTarget(TargetType.DELIVERY, deliveryId);
         const version = versions.find(v => v.version_number === versionNumber);
 
         if (!version) {
             throw new RpcException({
                 status: 404,
-                message: `Version ${versionNumber} not found for schedule ${scheduleId}`
+                message: `Version ${versionNumber} not found for delivery ${deliveryId}`
             });
         }
-        const latestVersion = await this.contractScheduleVersionRepository.findLatestVersion(scheduleId);
+        const latestVersion = await this.contractVersionRepository.findLatestVersion(TargetType.DELIVERY, deliveryId);
         if (!latestVersion || latestVersion.version_number !== versionNumber) {
             throw new RpcException({
                 status: 400,
                 message: `Only the latest version (${latestVersion?.version_number}) can be accepted/rejected`
             });
         }
-        if (version.status !== ContractScheduleVersionStatus.PROPOSED) {
+        if (version.status !== VersionStatus.PROPOSED) {
             throw new RpcException({
                 status: 400,
                 message: `Version is already ${version.status}`
             });
         }
-        await this.contractScheduleVersionRepository.updateStatus(
-            version.contract_schedule_version_id,
-            ContractScheduleVersionStatus.REJECTED
-        );
+        await this.contractVersionRepository.updateStatus(TargetType.DELIVERY, deliveryId, version.contract_version_id, VersionStatus.REJECTED);
+        const updatedVersion = await this.contractVersionRepository.findById(version.contract_version_id);
 
-        return await this.getScheduleVersionWithItems(version.contract_schedule_version_id);
+        return await this.getDeliveryVersionWithItems(version.contract_version_id);
     }
 
-    // get modification history for a schedule
-    async getScheduleModificationHistory(scheduleId: string): Promise<ContractScheduleVersionHistoryDto> {
-        const schedule = await this.contractScheduleRepository.findById(scheduleId);
-        if (!schedule) {
+    // get modification history for a delivery
+    async getDeliveryModificationHistory(deliveryId: string): Promise<DeliveryVersionHistoryDto> {
+        const delivery = await this.deliveryRepository.findById(deliveryId);
+        if (!delivery) {
             throw new RpcException({
                 status: 404,
-                message: `Contract schedule not found: ${scheduleId}`
+                message: `Contract delivery not found: ${deliveryId}`
             });
         }
 
-        const versions = await this.contractScheduleVersionRepository.findByScheduleId(scheduleId);
-        const acceptedVersion = await this.contractScheduleVersionRepository.findAcceptedVersion(scheduleId);
+        const versions = await this.contractVersionRepository.findByTarget(TargetType.DELIVERY, deliveryId);
+        const acceptedVersion = await this.contractVersionRepository.findAcceptedVersion(TargetType.DELIVERY, deliveryId);
 
         const versionsWithItems = await Promise.all(
             versions.map(async (version) => {
-                const items = await this.contractScheduleItemRepository.findByVersionId(version.contract_schedule_version_id);
+                const items = await this.contractItemRepository.findByVersionId(TargetType.DELIVERY, deliveryId, version.contract_version_id);
                 return this.mapToVersionResponseDto(version, items);
             })
         );
 
-        let activeVersionDto: ContractScheduleVersionResponseDto | undefined = undefined;
+        let activeVersionDto: DeliveryVersionResponseDto | undefined = undefined;
         if (acceptedVersion) {
-            const activeItems = await this.contractScheduleItemRepository.findByVersionId(acceptedVersion.contract_schedule_version_id);
+            const activeItems = await this.contractItemRepository.findByVersionId(TargetType.DELIVERY, deliveryId, acceptedVersion.contract_version_id);
             activeVersionDto = this.mapToVersionResponseDto(acceptedVersion, activeItems);
         }
 
         return {
-            schedule_id: scheduleId,
-            scheduled_delivery_date: schedule.scheduled_delivery_date,
-            current_status: schedule.status,
+            delivery_id: deliveryId,
+            scheduled_delivery_date: delivery.scheduled_delivery_date,
+            current_status: delivery.status,
             versions: versionsWithItems,
             active_version: activeVersionDto
         };
     }
 
-    // compare two versions of a schedule
-    async compareScheduleVersions(scheduleId: string, versionNumberA: number, versionNumberB: number): Promise<ContractScheduleVersionComparisonDto> {
-        const versions = await this.contractScheduleVersionRepository.findByScheduleId(scheduleId);
+    // compare two versions of a delivery
+    async compareDeliveryVersions(deliveryId: string, versionNumberA: number, versionNumberB: number): Promise<DeliveryVersionComparisonDto> {
+        const versions = await this.contractVersionRepository.findByTarget(TargetType.DELIVERY, deliveryId);
 
         const versionA = versions.find(v => v.version_number === versionNumberA);
         const versionB = versions.find(v => v.version_number === versionNumberB);
@@ -199,10 +197,10 @@ export class ContractScheduleVersionService {
                 message: `One or both versions not found`
             });
         }
-        const itemsA = await this.contractScheduleItemRepository.findByVersionId(versionA.contract_schedule_version_id);
-        const itemsB = await this.contractScheduleItemRepository.findByVersionId(versionB.contract_schedule_version_id);
+        const itemsA = await this.contractItemRepository.findByVersionId(TargetType.DELIVERY, deliveryId, versionA.contract_version_id);
+        const itemsB = await this.contractItemRepository.findByVersionId(TargetType.DELIVERY, deliveryId, versionB.contract_version_id);
 
-        const differences = this.calculateScheduleVersionDifferences(
+        const differences = this.calculateDeliveryVersionDifferences(
             this.mapToVersionResponseDto(versionA, itemsA),
             this.mapToVersionResponseDto(versionB, itemsB)
         );
@@ -215,11 +213,11 @@ export class ContractScheduleVersionService {
     }
 
     // get active version for order generation (only accepted version can be active)
-    async getActiveVersionForOrderGeneration(scheduleId: string): Promise<ContractScheduleVersionResponseDto | null> {
-        const acceptedVersion = await this.contractScheduleVersionRepository.findAcceptedVersion(scheduleId);
+    async getActiveVersionForOrderGeneration(deliveryId: string): Promise<DeliveryVersionResponseDto | null> {
+        const acceptedVersion = await this.contractVersionRepository.findAcceptedVersion(TargetType.DELIVERY, deliveryId);
 
         if (acceptedVersion) {
-            const items = await this.contractScheduleItemRepository.findByVersionId(acceptedVersion.contract_schedule_version_id);
+            const items = await this.contractItemRepository.findByVersionId(TargetType.DELIVERY, deliveryId, acceptedVersion.contract_version_id);
             return this.mapToVersionResponseDto(acceptedVersion, items);
         }
 
@@ -228,7 +226,7 @@ export class ContractScheduleVersionService {
 
     // helper methods
 
-    private async validateScheduleForModification(schedule: any, contract: any, proposedBy: ProposedBy): Promise<void> {
+    private async validateDeliveryForModification(delivery: any, contract: any, proposedBy: ProposedBy): Promise<void> {
         if (contract.status !== ContractStatus.ACTIVE) {
             throw new RpcException({
                 status: 400,
@@ -236,22 +234,22 @@ export class ContractScheduleVersionService {
             });
         }
 
-        if (schedule.status !== ContractScheduleStatus.SCHEDULED) {
+        if (delivery.status !== DeliveryStatus.SCHEDULED) {
             throw new RpcException({
                 status: 400,
-                message: `Schedule cannot be modified. Current status: ${schedule.status}`
+                message: `Delivery cannot be modified. Current status: ${delivery.status}`
             });
         }
 
         const today = new Date();
-        const deliveryDate = new Date(schedule.scheduled_delivery_date);
+        const deliveryDate = new Date(delivery.scheduled_delivery_date);
         const deadlineDate = new Date(deliveryDate);
         deadlineDate.setDate(deadlineDate.getDate() - contract.change_deadline_days);
 
         if (today > deadlineDate) {
             throw new RpcException({
                 status: 400,
-                message: `Cannot modify schedule after the change deadline. Deadline was: ${deadlineDate.toISOString()}`
+                message: `Cannot modify delivery after the change deadline. Deadline was: ${deadlineDate.toISOString()}`
             });
         }
         if (proposedBy === ProposedBy.SYSTEM) {
@@ -262,23 +260,22 @@ export class ContractScheduleVersionService {
         }
     }
 
-    private async getScheduleVersionWithItems(versionId: string): Promise<ContractScheduleVersionResponseDto> {
-        const versions = await this.contractScheduleVersionRepository.findByScheduleId(versionId);
-        const version = versions.find(v => v.contract_schedule_version_id === versionId);
-
+    private async getDeliveryVersionWithItems(versionId: number): Promise<DeliveryVersionResponseDto> {
+        const version = await this.contractVersionRepository.findById(versionId);
         if (!version) {
             throw new RpcException({
                 status: 404,
                 message: `Version not found: ${versionId}`
             });
         }
+        const deliveryId = version.target_id;
 
-        const items = await this.contractScheduleItemRepository.findByVersionId(versionId);
+        const items = await this.contractItemRepository.findByVersionId(TargetType.DELIVERY, deliveryId, versionId);
         return this.mapToVersionResponseDto(version, items);
     }
 
-    private mapToVersionResponseDto(version: any, items: any[]): ContractScheduleVersionResponseDto {
-        const itemsDto: ContractScheduleItemDto[] = items.map(item => ({
+    private mapToVersionResponseDto(version: any, items: any[]): DeliveryVersionResponseDto {
+        const itemsDto: DeliveryItemDto[] = items.map(item => ({
             product_id: item.product_id,
             quantity: Number(item.quantity),
             unit_price: Number(item.unit_price),
@@ -286,8 +283,8 @@ export class ContractScheduleVersionService {
         }));
 
         return {
-            contract_schedule_version_id: version.contract_schedule_version_id,
-            contract_schedule_id: version.contract_schedule_id,
+            delivery_version_id: version.contract_version_id,
+            delivery_id: version.delivery_id,
             version_number: version.version_number,
             proposed_by: version.proposed_by,
             change_reason: version.change_reason,
@@ -297,7 +294,7 @@ export class ContractScheduleVersionService {
         };
     }
 
-    private calculateScheduleVersionDifferences(versionA: ContractScheduleVersionResponseDto, versionB: ContractScheduleVersionResponseDto): any {
+    private calculateDeliveryVersionDifferences(versionA: DeliveryVersionResponseDto, versionB: DeliveryVersionResponseDto): any {
         const differences: any = {
             metadata: {}
         };
@@ -316,12 +313,12 @@ export class ContractScheduleVersionService {
             };
         }
 
-        differences.items = this.compareScheduleItems(versionA.items, versionB.items);
+        differences.items = this.compareDeliveryItems(versionA.items, versionB.items);
 
         return differences;
     }
 
-    private compareScheduleItems(itemsA: ContractScheduleItemDto[], itemsB: ContractScheduleItemDto[]): any[] {
+    private compareDeliveryItems(itemsA: DeliveryItemDto[], itemsB: DeliveryItemDto[]): any[] {
         const differences: any[] = [];
 
         const mapA = new Map(itemsA.map(i => [i.product_id, i]));
