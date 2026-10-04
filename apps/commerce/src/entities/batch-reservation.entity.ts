@@ -37,7 +37,7 @@ export class BatchReservation {
     orderItem: OrderItem;
 
     @Column({ type: 'int' })
-    kioskUserId: number;
+    kioskUserId: string;
 
     @Column({ type: 'int' })
     quantity: number;

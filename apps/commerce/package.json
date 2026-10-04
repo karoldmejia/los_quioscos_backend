@@ -17,13 +17,16 @@
     "test:cov": "jest --coverage",
     "test:e2e:commerce": "jest --config ./test/jest-e2e.json --runInBand",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register ../../node_modules/.bin/jest --runInBand"
-    },
+  },
   "dependencies": {
+    "@grpc/grpc-js": "^1.14.4",
+    "@grpc/proto-loader": "^0.8.1",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.0.1",
     "@nestjs/mapped-types": "^2.1.0",
     "@nestjs/microservices": "^11.1.11",
+    "@nestjs/platform-express": "^11.2.3",
     "@nestjs/schedule": "^6.1.0",
     "@nestjs/typeorm": "^11.0.0",
     "class-transformer": "^0.5.1",
@@ -65,7 +68,7 @@
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },
-        "transformIgnorePatterns": [
+    "transformIgnorePatterns": [
       "node_modules/(?!(module-to-transform)/)"
     ],
     "moduleNameMapper": {

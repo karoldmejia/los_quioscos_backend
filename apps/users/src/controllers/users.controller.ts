@@ -13,7 +13,7 @@ export class UsersController {
   ) {}
 
   @MessagePattern({ cmd: 'get_user' })
-  async getUser(@Payload() userId: number){
+  async getUser(@Payload() userId: string){
     return await this.usersService.findUserById(userId)
   }
 
@@ -31,42 +31,42 @@ export class UsersController {
   }
 
   @MessagePattern({cmd: 'add_role_to_user'})
-  async addRoleToUser(@Payload() payload: {userId: number; roleId: number;}) { 
+  async addRoleToUser(@Payload() payload: {userId: string; roleId: number;}) { 
       const { userId, roleId } = payload;
       return await this.usersService.addRoleToUser(userId, roleId)
   }
 
   @MessagePattern({ cmd: 'delete_user_role' })
-  async deleteUserRole(@Payload() userId: number) {
+  async deleteUserRole(@Payload() userId: string) {
     return await this.usersService.deleteUserRole(userId);
   }
 
 
   @MessagePattern({cmd: 'reset_password'})
-  async resetPassword(@Payload() payload: {userId: number; newPassword: string; duplicatedNewPassword: string; otp: string;}) { 
+  async resetPassword(@Payload() payload: {userId: string; newPassword: string; duplicatedNewPassword: string; otp: string;}) { 
       const { userId, newPassword, duplicatedNewPassword, otp } = payload;
       return await this.usersService.resetPassword(userId, newPassword, duplicatedNewPassword, otp)
   }
 
   @MessagePattern({ cmd: 'update_contact_info' })
-  async updateContactInfo(@Payload() payload: {userId: number; updatedUser: UpdateUserDto; password: string;}) { 
+  async updateContactInfo(@Payload() payload: {userId: string; updatedUser: UpdateUserDto; password: string;}) { 
     const { userId, updatedUser, password } = payload;
     return await this.usersService.updateUserContactInfo(userId, updatedUser, password)
   }
 
   @MessagePattern({ cmd: 'update_username' })
-  async updateUsername(@Payload() payload: {userId: number; username: string;}) { 
+  async updateUsername(@Payload() payload: {userId: string; username: string;}) { 
     const { userId, username } = payload;
     return await this.usersService.updateUserUsername(userId, username)
   }
 
   @MessagePattern({ cmd: 'delete_user' })
-  async deleteUser(@Payload() userId: number){
+  async deleteUser(@Payload() userId: string){
     return await this.usersService.deleteUser(userId)
   }
 
   @MessagePattern({ cmd: 'recover_account' })
-  async recoverAccount(@Payload() userId: number){
+  async recoverAccount(@Payload() userId: string){
     return await this.usersService.recoverAccount(userId)
   }
 

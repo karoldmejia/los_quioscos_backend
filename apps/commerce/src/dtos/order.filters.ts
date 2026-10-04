@@ -1,4 +1,4 @@
-import { OrderStatus } from "../enums/order-status.enum";
+import { OrderStatus } from "../enums/order.enum.js";
 
 export type FindManyOrdersFilters = {
   status?: OrderStatus | OrderStatus[];

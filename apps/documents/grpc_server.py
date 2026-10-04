@@ -20,5 +20,6 @@ class DocumentGrpcServer(
         return documents_pb2.DocumentValidationResponse(
             is_valid=result.get("is_valid", False),
             error_code=result.get("error_code", ""),
-            error_message=result.get("error_message", "")
+            error_message=result.get("error_message", ""),
+            document_id=result.get("document_id", "")
         )

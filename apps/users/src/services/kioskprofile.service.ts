@@ -1,17 +1,19 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import { KioskProfileRepository } from "../repositories/impl/kioskprofile.repository";
 import { KioskProfileDto } from "../dtos/kioskprofile.dto";
 import { KioskProfile } from "../entities/kiosk_profile.entity";
-import { DocumentStatus } from "../entities/document_status.enum";
+import { DocumentStatus } from "../enums/document_status.enum";
 import { DocumentsValidationService } from "./documents-validation.service";
 import { RpcException } from "@nestjs/microservices";
+import { InjectRepository } from "@nestjs/typeorm";
+import { In, Repository } from "typeorm";
 
 @Injectable()
 export class KioskProfileService {
     constructor(
-        private readonly repo: KioskProfileRepository,
+        @InjectRepository(KioskProfile)
+        private readonly repo: Repository<KioskProfile>,
         private readonly documentsValidation: DocumentsValidationService,
-    ) {}
+    ) { }
 
     async create(dto: KioskProfileDto): Promise<KioskProfile> {
         return await this.repo.create({
@@ -21,13 +23,14 @@ export class KioskProfileService {
             kioskName: dto.kioskName || '',
             kioskDescr: dto.kioskDescr || '',
             documentsStatus: { ID: DocumentStatus.PENDING },
+            serviceRadiusKm: 5,
             declarationSignedAt: undefined,
         });
     }
 
-    async updateProfile(userId: number, dto: KioskProfileDto): Promise<KioskProfile> {
+    async updateProfile(userId: string, dto: KioskProfileDto): Promise<KioskProfile> {
         // 1. Verificar si el perfil existe
-        const existingProfile = await this.repo.findByUserId(userId);
+        const existingProfile = await this.repo.findOneBy({ userId });
         if (!existingProfile) {
             throw new RpcException(`Kiosk's profile not found for user ${userId}`);
         }
@@ -57,33 +60,59 @@ export class KioskProfileService {
         if (dto.kioskName !== undefined) existingProfile.kioskName = dto.kioskName;
         if (dto.kioskDescr !== undefined) existingProfile.kioskDescr = dto.kioskDescr;
 
-        const updatedProfile = await this.repo.update(existingProfile);
+        const updatedProfile = await this.repo.save(existingProfile);
 
         return updatedProfile;
     }
 
-    async getProfileByUserId(userId: number): Promise<KioskProfile> {
-        const profile = await this.repo.findByUserId(userId);
+    // getters
+
+    async getProfileByUserId(userId: string): Promise<KioskProfile> {
+        const profile = await this.repo.findOneBy({ userId });
         if (!profile) throw new RpcException(`Kiosk's profile not found for user ${userId}`);
         return profile;
     }
     async getAllProfiles(): Promise<KioskProfile[]> {
-        return await this.repo.findAll();
+        return await this.repo.find({
+            relations: ['user']
+        });
     }
 
     async getActiveProfiles(): Promise<KioskProfile[]> {
-        return await this.repo.findActiveProfiles();
+        return await this.repo
+            .createQueryBuilder('profile')
+            .innerJoinAndSelect('profile.user', 'user')
+            .where('user.deletedAt IS NULL')
+            .getMany();
     }
 
     async getProfilesReadyToOperate(): Promise<KioskProfile[]> {
-        return await this.repo.findProfilesReadyToOperate();
+        return await this.repo
+            .createQueryBuilder('profile')
+            .innerJoinAndSelect('profile.user', 'user')
+            .where('profile.canOperate = :canOperate', { canOperate: true })
+            .andWhere('user.deletedAt IS NULL')
+            .getMany();
     }
 
     async getProfilesWithPendingDocuments(): Promise<KioskProfile[]> {
-        return await this.repo.findProfilesWithPendingDocuments();
+        return await this.repo
+            .createQueryBuilder("profile")
+            .innerJoinAndSelect('profile.user', 'user')
+            .where("JSON_CONTAINS(JSON_KEYS(profile.documentsStatus), :pending)", { pending: '"PENDING"' })
+            .andWhere('user.deletedAt IS NULL')
+            .getMany();
     }
 
-    async uploadIdDocument(userId: number, file: Buffer, selfie?: Buffer): Promise<{ profile: KioskProfile; validation: any }> {
+    async getProfilesByUserIds(userIds: string[]): Promise<KioskProfile[]> {
+        return await this.repo.find({
+            where: { userId: In(userIds) },
+        });
+    }
+
+    // documents
+
+    async uploadIdDocument(userId: string, file: Buffer, selfie?: Buffer): Promise<{ profile: KioskProfile; validation: any }> {
         const profile = await this.getProfileByUserId(userId);
         const docPriority = ['1', '2'];
         let validationResult: any = null;
@@ -111,7 +140,7 @@ export class KioskProfileService {
             s => s === DocumentStatus.VALID
         ) && !!profile.declarationSignedAt;
 
-        const updatedProfile = await this.repo.update(profile);
+        const updatedProfile = await this.repo.save(profile);
 
         return {
             profile: updatedProfile,
@@ -119,8 +148,8 @@ export class KioskProfileService {
         };
     }
 
-    async signDeclaration(userId: number): Promise<KioskProfile> {
-        const profile = await this.repo.findByUserId(userId);
+    async signDeclaration(userId: string): Promise<KioskProfile> {
+        const profile = await this.repo.findOneBy({ userId });
         if (!profile) throw new RpcException("Profile not found");
 
         profile.declarationSignedAt = new Date();
@@ -130,36 +159,36 @@ export class KioskProfileService {
         );
         profile.canOperate = allValid && !!profile.declarationSignedAt;
 
-        const updatedProfile = await this.repo.update(profile);
+        const updatedProfile = await this.repo.save(profile);
 
-        return updatedProfile;    
+        return updatedProfile;
     }
 
     // helpers
 
     private validateIdNumber(idNumber: string): boolean {
         if (!idNumber) return false;
-        
+
         const cleanedId = idNumber.replace(/\D/g, '');
         return cleanedId.length >= 7 && cleanedId.length <= 10;
     }
 
-    private async isKioskNameUnique(kioskName: string, excludeUserId: number): Promise<boolean> {
+    private async isKioskNameUnique(kioskName: string, excludeuserId: string): Promise<boolean> {
         if (!kioskName) return true;
-        
-        const existingProfile = await this.repo.findByKioskName(kioskName);
-        
+
+        const existingProfile = await this.repo.findOneBy({ kioskName });
+
         if (!existingProfile) return true;
-        return existingProfile.userId === excludeUserId;
+        return existingProfile.userId === excludeuserId;
     }
 
-    private async isFullLegalNameUnique(fullLegalName: string, excludeUserId: number): Promise<boolean> {
+    private async isFullLegalNameUnique(fullLegalName: string, excludeuserId: string): Promise<boolean> {
         if (!fullLegalName) return true;
-        
-        const existingProfile = await this.repo.findByFullLegalName(fullLegalName);
+
+        const existingProfile = await this.repo.findOneBy({ fullLegalName });
         if (!existingProfile) return true;
-        
-        return existingProfile.userId === excludeUserId;
+
+        return existingProfile.userId === excludeuserId;
     }
 
 }

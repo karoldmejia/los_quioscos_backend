@@ -9,6 +9,8 @@ import { Product } from '../entities/product.entity';
 import { CartStatus } from '../enums/cart-status.enum';
 import { RpcException } from '@nestjs/microservices';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { UsersClient } from '../clients/users.client';
+import { KioskAvailability } from 'src/protos/users';
 
 @Injectable()
 export class CartService {
@@ -21,6 +23,7 @@ export class CartService {
         private readonly cartItemRepository: CartItemRepository,
         private readonly productRepository: ProductRepository,
         private readonly batchRepository: BatchRepository,
+        private readonly usersClient: UsersClient,
     ) { }
 
     // cart management
@@ -180,14 +183,8 @@ export class CartService {
 
     // helper methods
 
-    async calculateCartTotal(cartId: string): Promise<number> {
-        const cart = await this.cartRepository.findByIdWithItems(cartId);
-
-        if (!cart) {
-            throw new RpcException('Cart not found');
-        }
-
-        return cart.items.reduce((total, item) => {
+    async calculateCartTotal(items: CartItem[]): Promise<number> {
+        return items.filter(item => item !== null && item !== undefined).reduce((total, item) => {
             const itemPrice = parseFloat(item.product.price) || 0;
             return total + (itemPrice * item.quantity);
         }, 0);
@@ -209,8 +206,21 @@ export class CartService {
             throw new RpcException('Cart not found');
         }
 
-        const total = await this.calculateCartTotal(cartId);
+        const availabilityMap = await this.validateKiosksAvailability(cart.items)
+
+        const items = cart.items.map(item => ({
+            id: item.id,
+            productId: item.productId,
+                productName: item.product.name,
+                quantity: item.quantity,
+                price: parseFloat(item.product.price),
+                subtotal: parseFloat(item.product.price) * item.quantity,
+            isAvailable: availabilityMap.get(item.id) ?? false
+        })
+        )
+        const total = await this.calculateCartTotal(cart.items.filter(item => availabilityMap.get(item.id) === true));
         const itemCount = await this.countItems(cartId);
+        const availableItemCount = items.filter(i => i.isAvailable).length
         const isEmpty = itemCount === 0;
 
         return {
@@ -219,16 +229,10 @@ export class CartService {
             status: cart.status,
             lastActivityAt: cart.lastActivityAt,
             itemCount,
+            availableItemCount,
             total,
             isEmpty,
-            items: cart.items.map(item => ({
-                id: item.id,
-                productId: item.productId,
-                productName: item.product.name,
-                quantity: item.quantity,
-                price: parseFloat(item.product.price),
-                subtotal: parseFloat(item.product.price) * item.quantity
-            }))
+            items
         };
     }
 
@@ -261,6 +265,24 @@ export class CartService {
     async updateCartStatus(cartId: string, status: CartStatus): Promise<Cart> {
         return await this.cartRepository.updateStatus(cartId, status);
     }
+
+    // validation of kiosks availability
+
+    async validateKiosksAvailability(items: CartItem[]): Promise<Map<string, boolean>>{
+        const kiosksIds = [...new Set(items.filter(item => item !== null && item !== undefined).map(item => item.product.kioskUserId))]
+        const availableItems = await this.usersClient.getKiosksAvailability(kiosksIds)
+
+        const availabilityByKiosk = new Map<string, KioskAvailability>(availableItems.map(a => [a.kioskId, a]))
+        const availabilityMap = new Map<string, boolean>()
+        for (const item of items){
+            const kioskId = item.product.kioskUserId
+            const availability = availabilityByKiosk.get(kioskId)
+            const isAvailable = availability?.isAvailable ?? false
+            availabilityMap.set(item.id, isAvailable)
+        }
+        return availabilityMap;
+    }
+
 
     // cron jobs
 

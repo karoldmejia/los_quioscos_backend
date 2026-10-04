@@ -1,14 +1,26 @@
+import * as path from 'path';
+import * as dotenv from 'dotenv';
+
+dotenv.config({ path: path.join(__dirname, '..', '.env.test') })
+
+jest.mock('../src/services/redis.service', () => ({
+    RedisService: jest.fn().mockImplementation(() => ({
+        get: jest.fn().mockResolvedValue(null),
+        set: jest.fn().mockResolvedValue('OK'),
+        del: jest.fn().mockResolvedValue(1),
+        quit: jest.fn().mockResolvedValue('OK'),
+        onModuleDestroy: jest.fn().mockResolvedValue(undefined),
+    })),
+}));
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestMicroservice } from '@nestjs/common';
 import { AppModule } from '../src/app.module';
 import { DataSource } from 'typeorm';
 import { ClientProxy, ClientProxyFactory, Transport } from '@nestjs/microservices';
-import * as dotenv from 'dotenv';
 import { of } from 'rxjs';
 import { User } from '../src/entities/user.entity';
 
-
-dotenv.config({ path: '.env' });
 
 describe('KioskProfile Microservice (TCP) - e2e', () => {
   let app: INestMicroservice;
@@ -22,7 +34,7 @@ describe('KioskProfile Microservice (TCP) - e2e', () => {
     kioskDescr: 'Descripcion',
   };
 
-  let validUserId: number;
+  let validuserId: string;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -31,14 +43,14 @@ describe('KioskProfile Microservice (TCP) - e2e', () => {
 
     app = moduleFixture.createNestMicroservice({
       transport: Transport.TCP,
-      options: { host: '127.0.0.1', port: 3002 },
+      options: { host: '127.0.0.1', port: 3004 },
     });
 
     await app.listen();
 
     client = ClientProxyFactory.create({
       transport: Transport.TCP,
-      options: { host: '127.0.0.1', port: 3002 },
+      options: { host: '127.0.0.1', port: 3004 },
     });
     await client.connect();
 

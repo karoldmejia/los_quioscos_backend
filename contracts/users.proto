@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package users;
+
+service UsersService {
+    rpc GetKiosksAvailability (KiosksAvailabilityRequest) returns (KiosksAvailabilityResponse);
+    rpc GetUserProfile (GetUserProfileRequest) returns (UserProfile);
+}
+
+message KiosksAvailabilityRequest {
+    repeated string kioskIds = 1;
+}
+
+message KiosksAvailabilityResponse {
+    repeated KioskAvailability items = 1;
+}
+
+message KioskAvailability {
+    string kioskId = 1;
+    bool isAvailable = 2;
+    string reason = 3;
+}
+
+message GetUserProfileRequest {
+    string userId = 1;
+}
+
+message UserProfile {
+    string userId = 1;
+    string email = 2;
+    string username = 3;
+}

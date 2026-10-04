@@ -10,8 +10,8 @@ import { ContractItem } from './contract-item.entity';
     id: string;
 
     @Index()
-    @Column({ type: 'int' })
-    kioskUserId: number;
+    @Column({ type: 'uuid' })
+    kioskUserId: string;
 
     @Column({ type: 'varchar', length: 120 })
     name: string;

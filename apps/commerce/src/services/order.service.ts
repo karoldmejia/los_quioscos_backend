@@ -1,26 +1,28 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { RpcException } from '@nestjs/microservices';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { ClientKafka, RpcException } from '@nestjs/microservices';
 
 import { OrderRepository } from '../repositories/impl/order.repository';
 import { OrderItemRepository } from '../repositories/impl/order-item.repository';
 import { Order } from '../entities/order.entity';
 import { OrderItem } from '../entities/order-item.entity';
-import { OrderStatus } from '../enums/order-status.enum';
 
 import { BatchReservationService } from './reservation.service';
 import { DataSource } from 'typeorm';
+import { LogisticsLoadDto, OrderPaidEventDto, OrderPaidItemDto, PackageDto } from 'src/dtos/order-generation.dto';
+import { OrderStatus } from 'src/enums/order.enum';
 
 @Injectable()
 export class OrderService {
   private readonly logger = new Logger(OrderService.name);
 
   constructor(
-        private readonly dataSource: DataSource,
+    private readonly dataSource: DataSource,
 
     private readonly orderRepository: OrderRepository,
     private readonly orderItemRepository: OrderItemRepository,
     private readonly reservationService: BatchReservationService,
-  ) {}
+    @Inject('KAFKA_SERVICE') private readonly kafkaClient: ClientKafka,
+  ) { }
 
 
   /**
@@ -32,7 +34,7 @@ export class OrderService {
    * - We create reservations for 15min, without discounting from real stock
    * - If there is not enough stock, it must safely fail
    */
-  async createOrderWithItemsAndReserveStock(params: {orderData: Partial<Order>; itemsData: Partial<OrderItem>[]; expiresInMinutes?: number;}): Promise<Order> {
+  async createOrderWithItemsAndReserveStock(params: { orderData: Partial<Order>; itemsData: Partial<OrderItem>[]; expiresInMinutes?: number; }): Promise<Order> {
     const { orderData, itemsData, expiresInMinutes = 15 } = params;
 
     const queryRunner = this.dataSource.createQueryRunner(); //?
@@ -96,7 +98,7 @@ export class OrderService {
    * - time is extended for 15 minutes more
    * - order changes status
    */
-  async acceptOrder(orderId: string): Promise<Order> {
+  async acceptOrder(orderId: string, dto: LogisticsLoadDto): Promise<Order> {
     try {
       const order = await this.orderRepository.findById(orderId);
 
@@ -107,7 +109,11 @@ export class OrderService {
       }
 
       await this.reservationService.extendReservationsForAcceptedOrder(orderId);
-      await this.orderRepository.markAccepted(orderId);
+      await this.orderRepository.update(orderId, {
+        status: OrderStatus.ACCEPTED,
+        logisticsLoad: dto,
+        updatedAt: new Date(),
+      });
 
       const updated = await this.orderRepository.findById(orderId);
       this.logger.log(`Order ${orderId} accepted + reservations extended`);
@@ -210,10 +216,35 @@ export class OrderService {
       const updated = await this.orderRepository.findById(orderId);
       this.logger.log(`Order ${orderId} marked PAID + reservations consumed`);
 
+      const payload = await this.buildOrderForLogistics(order)
+      this.kafkaClient.emit('order.paid', payload)
       return updated!;
     } catch (error) {
       if (error instanceof RpcException) throw error;
       throw new RpcException('Failed to mark order as paid');
+    }
+  }
+
+  private async buildOrderForLogistics(order: Order): Promise<OrderPaidEventDto> {
+    const items: OrderPaidItemDto[] = order.items.map((item) => ({
+      name: item.product?.name,
+      unit: item.product?.unitMeasure ?? item.product?.customUnitMeasure ?? '',
+      quantity: item.quantity
+    }));
+
+    if (!order.logisticsLoad) {
+      throw new RpcException(
+        `Order ${order.id} is PAID but has no logistic load`,
+      );
+    }
+
+    return {
+      orderId: order.id,
+      userId: order.userId,
+      kioskId: order.kioskUserId,
+      deliveryMode: order.deliveryMode,
+      items,
+      logisticsLoad: order.logisticsLoad
     }
   }
 

@@ -245,7 +245,7 @@ export class CheckoutSessionRepository implements ICheckoutSessionRepository {
 
     // KIOSKS METHODS
 
-    async findSessionsByKioskUserId(kioskUserId: number): Promise<CheckoutSession[]> {
+    async findSessionsByKioskUserId(kioskUserId: string): Promise<CheckoutSession[]> {
         return await this.repo
             .createQueryBuilder('session')
             .innerJoinAndSelect('session.orders', 'order')
@@ -257,7 +257,7 @@ export class CheckoutSessionRepository implements ICheckoutSessionRepository {
             .getMany();
     }
 
-    async findPendingSessionsByKioskUserId(kioskUserId: number): Promise<CheckoutSession[]> {
+    async findPendingSessionsByKioskUserId(kioskUserId: string): Promise<CheckoutSession[]> {
         return await this.repo
             .createQueryBuilder('session')
             .innerJoinAndSelect('session.orders', 'order')

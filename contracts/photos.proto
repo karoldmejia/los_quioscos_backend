@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package photos;
+
+service PhotosService {
+    rpc Upload (UploadRequest) returns (UploadResponse) {}
+    rpc Delete (DeleteRequest) returns (DeleteResponse) {}
+}
+
+message UploadRequest {
+    bytes file = 1;
+}
+
+message UploadResponse {
+    string photoId = 1;
+}
+
+message DeleteRequest {
+    string photoId = 1;
+}
+
+message DeleteResponse {
+    bool success = 1;
+}

@@ -124,14 +124,14 @@ export class BatchReservationRepository extends IBatchReservationRepository {
         });
     }
 
-    async findByKioskUserId(kioskUserId: number): Promise<BatchReservation[]> {
+    async findByKioskUserId(kioskUserId: string): Promise<BatchReservation[]> {
         return await this.repo.find({
             where: { kioskUserId },
             order: { createdAt: 'DESC' }
         });
     }
 
-    async findActiveByKioskUserId(kioskUserId: number): Promise<BatchReservation[]> {
+    async findActiveByKioskUserId(kioskUserId: string): Promise<BatchReservation[]> {
         return await this.repo.find({
             where: {
                 kioskUserId,
@@ -213,7 +213,7 @@ export class BatchReservationRepository extends IBatchReservationRepository {
         return parseInt(result?.total || '0', 10);
     }
 
-    async getTotalReservedQuantityByProductAndKiosk(productId: string, kioskUserId: number): Promise<number> {
+    async getTotalReservedQuantityByProductAndKiosk(productId: string, kioskUserId: string): Promise<number> {
         const result = await this.repo
             .createQueryBuilder('reservation')
             .select('SUM(reservation.quantity)', 'total')
@@ -370,14 +370,14 @@ export class BatchReservationRepository extends IBatchReservationRepository {
         return count > 0;
     }
 
-    async findByBatchAndProductAndKiosk(batchId: string, productId: string, kioskUserId: number): Promise<BatchReservation[]> {
+    async findByBatchAndProductAndKiosk(batchId: string, productId: string, kioskUserId: string): Promise<BatchReservation[]> {
         return await this.repo.find({
             where: { batchId, productId, kioskUserId },
             order: { createdAt: 'DESC' }
         });
     }
 
-    async findActiveReservationsByProductAndKiosk(productId: string, kioskUserId: number): Promise<BatchReservation[]> {
+    async findActiveReservationsByProductAndKiosk(productId: string, kioskUserId: string): Promise<BatchReservation[]> {
         return await this.repo.find({
             where: {
                 productId,

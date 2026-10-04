@@ -60,7 +60,7 @@ export class BatchReservationService {
     }
   }
 
-  private async reserveForProduct(orderId: string, kioskUserId: number, productId: string, quantity: number, expiresAt: Date, manager?: EntityManager,): Promise<BatchReservation[]> {
+  private async reserveForProduct(orderId: string, kioskUserId: string, productId: string, quantity: number, expiresAt: Date, manager?: EntityManager,): Promise<BatchReservation[]> {
     const batches = await this.batchRepository.findActiveByProductIdandKioskId(
       productId,
       kioskUserId,
@@ -246,7 +246,7 @@ export class BatchReservationService {
     }
 
     // verifies stock availability for products
-    async checkStockAvailability(kioskUserId: number, items: ReservationRequestItemDTO[]): Promise<StockAvailabilityResponseDTO[]> {
+    async checkStockAvailability(kioskUserId: string, items: ReservationRequestItemDTO[]): Promise<StockAvailabilityResponseDTO[]> {
         try {
             if (items && items.length > 0) {
                 for (const item of items) {
@@ -362,7 +362,7 @@ export class BatchReservationService {
 
 
     // simulates asignation without creating real reservations
-    async simulateReservationAllocation(kioskUserId: number, items: ReservationRequestItemDTO[]): Promise<BatchAllocationDTO[][]> {
+    async simulateReservationAllocation(kioskUserId: string, items: ReservationRequestItemDTO[]): Promise<BatchAllocationDTO[][]> {
         try {
             const allocations: BatchAllocationDTO[][] = [];
 

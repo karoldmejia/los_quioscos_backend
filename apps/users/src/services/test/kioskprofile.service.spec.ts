@@ -1,10 +1,11 @@
 import { Test } from '@nestjs/testing';
 import { KioskProfileService } from '../kioskprofile.service';
-import { KioskProfileRepository } from '../../repositories/impl/kioskprofile.repository';
-import { DocumentsValidationService } from '../documents-validation.service'; // ← Importar correcto
+import { DocumentsValidationService } from '../documents-validation.service';
 import { KioskProfileDto } from '../../dtos/kioskprofile.dto';
-import { DocumentStatus } from '../../entities/document_status.enum';
+import { DocumentStatus } from '../../enums/document_status.enum';
 import { RpcException } from '@nestjs/microservices';
+import { KioskProfile } from '@/entities/kiosk_profile.entity';
+import { getRepositoryToken } from '@nestjs/typeorm';
 
 describe('KioskProfileService', () => {
   let service: KioskProfileService;
@@ -26,7 +27,7 @@ describe('KioskProfileService', () => {
   };
 
   const validDto: KioskProfileDto = {
-    userId: 1,
+    userId: 'aa778eb6-7fc6-4757-ae68-612ac4f1837a',
     fullLegalName: 'Juan Perez',
     idNumber: '1234567890',
     kioskName: 'Kiosko 1',
@@ -37,7 +38,7 @@ describe('KioskProfileService', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         KioskProfileService,
-        { provide: KioskProfileRepository, useValue: repoMock },
+        { provide: getRepositoryToken(KioskProfile), useValue: repoMock },
         { provide: DocumentsValidationService, useValue: documentsValidationMock },
       ],
     }).compile();
@@ -71,7 +72,7 @@ describe('KioskProfileService', () => {
   // updateProfile
   describe('updateProfile', () => {
     const existingProfile = { 
-      userId: 1, 
+      userId: 'aa778eb6-7fc6-4757-ae68-612ac4f1837a', 
       fullLegalName: 'Juan Perez',
       idNumber: '1234567890',
       kioskName: 'Kiosko Viejo',
@@ -87,7 +88,7 @@ describe('KioskProfileService', () => {
     it('should throw if profile not found', async () => {
       repoMock.findByUserId.mockResolvedValue(null);
 
-      await expect(service.updateProfile(1, validDto))
+      await expect(service.updateProfile('aa778eb6-7fc6-4757-ae68-612ac4f1837a', validDto))
         .rejects.toThrow(RpcException);
     });
 
@@ -95,28 +96,28 @@ describe('KioskProfileService', () => {
       repoMock.findByKioskName.mockResolvedValue(null);
       repoMock.findByFullLegalName.mockResolvedValue(null);
 
-      const result = await service.updateProfile(1, { kioskName: 'Nuevo Kiosko' } as any);
+      const result = await service.updateProfile('aa778eb6-7fc6-4757-ae68-612ac4f1837a', { kioskName: 'Nuevo Kiosko' } as any);
 
       expect(repoMock.update).toHaveBeenCalledWith(expect.objectContaining({ kioskName: 'Nuevo Kiosko' }));
       expect(result.kioskName).toBe('Nuevo Kiosko');
     });
 
     it('should validate ID number length', async () => {
-      await expect(service.updateProfile(1, { idNumber: '123' } as any))
+      await expect(service.updateProfile('aa778eb6-7fc6-4757-ae68-612ac4f1837a', { idNumber: '123' } as any))
         .rejects.toThrow('ID number must have between 7 and 10 digits');
     });
 
     it('should validate kiosk name uniqueness', async () => {
       repoMock.findByKioskName.mockResolvedValue({ userId: 2, kioskName: 'Kiosko Existente' });
       
-      await expect(service.updateProfile(1, { kioskName: 'Kiosko Existente' } as any))
+      await expect(service.updateProfile('aa778eb6-7fc6-4757-ae68-612ac4f1837a', { kioskName: 'Kiosko Existente' } as any))
         .rejects.toThrow('Kiosk name is already taken');
     });
 
     it('should allow same kiosk name for same user', async () => {
-      repoMock.findByKioskName.mockResolvedValue({ userId: 1, kioskName: 'Mi Kiosko' });
+      repoMock.findByKioskName.mockResolvedValue({ userId: 'aa778eb6-7fc6-4757-ae68-612ac4f1837a', kioskName: 'Mi Kiosko' });
       
-      const result = await service.updateProfile(1, { kioskName: 'Mi Kiosko' } as any);
+      const result = await service.updateProfile('aa778eb6-7fc6-4757-ae68-612ac4f1837a', { kioskName: 'Mi Kiosko' } as any);
       
       expect(result.kioskName).toBe('Mi Kiosko');
       expect(repoMock.update).toHaveBeenCalled();
@@ -127,7 +128,7 @@ describe('KioskProfileService', () => {
   describe('getProfileByUserId', () => {
     it('should throw if profile not found', async () => {
       repoMock.findByUserId.mockResolvedValue(null);
-      await expect(service.getProfileByUserId(1))
+      await expect(service.getProfileByUserId('aa778eb6-7fc6-4757-ae68-612ac4f1837a'))
         .rejects.toThrow(RpcException);
     });
 
@@ -135,7 +136,7 @@ describe('KioskProfileService', () => {
       const profile = { ...validDto };
       repoMock.findByUserId.mockResolvedValue(profile);
 
-      const result = await service.getProfileByUserId(1);
+      const result = await service.getProfileByUserId('aa778eb6-7fc6-4757-ae68-612ac4f1837a');
       expect(result).toEqual(profile);
     });
   });
@@ -179,7 +180,7 @@ describe('KioskProfileService', () => {
 
       repoMock.update.mockResolvedValue({ ...profile, documentsStatus: { ID: DocumentStatus.VALID } });
 
-      const result = await service.uploadIdDocument(1, file);
+      const result = await service.uploadIdDocument('aa778eb6-7fc6-4757-ae68-612ac4f1837a', file);
 
       expect(documentsValidationMock.validateDocument).toHaveBeenCalledTimes(2);
       expect(result.profile.documentsStatus.ID).toBe(DocumentStatus.VALID);
@@ -193,7 +194,7 @@ describe('KioskProfileService', () => {
 
       repoMock.update.mockResolvedValue({ ...profile, documentsStatus: { ID: DocumentStatus.REJECTED } });
 
-      const result = await service.uploadIdDocument(1, file);
+      const result = await service.uploadIdDocument('aa778eb6-7fc6-4757-ae68-612ac4f1837a', file);
 
       expect(result.profile.documentsStatus.ID).toBe(DocumentStatus.REJECTED);
     });
@@ -203,7 +204,7 @@ describe('KioskProfileService', () => {
   describe('signDeclaration', () => {
     it('should throw if profile not found', async () => {
       repoMock.findByUserId.mockResolvedValue(null);
-      await expect(service.signDeclaration(1))
+      await expect(service.signDeclaration('aa778eb6-7fc6-4757-ae68-612ac4f1837a'))
         .rejects.toThrow(RpcException);
     });
 
@@ -217,7 +218,7 @@ describe('KioskProfileService', () => {
       repoMock.findByUserId.mockResolvedValue(profile);
       repoMock.update.mockImplementation(async (p) => p);
 
-      const result = await service.signDeclaration(1);
+      const result = await service.signDeclaration('aa778eb6-7fc6-4757-ae68-612ac4f1837a');
 
       expect(result.declarationSignedAt).toBeDefined();
       expect(result.canOperate).toBe(true);
@@ -233,7 +234,7 @@ describe('KioskProfileService', () => {
       repoMock.findByUserId.mockResolvedValue(profile);
       repoMock.update.mockImplementation(async (p) => p);
 
-      const result = await service.signDeclaration(1);
+      const result = await service.signDeclaration('aa778eb6-7fc6-4757-ae68-612ac4f1837a');
 
       expect(result.declarationSignedAt).toBeDefined();
       expect(result.canOperate).toBe(false);

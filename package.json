@@ -14,12 +14,24 @@
     "test:e2e:documents": "npm run test:e2e:documents -w apps/documents",
     "test:e2e:api-gateway": "npm run test:e2e:api-gateway -w apps/api-gateway",
     "test:e2e:commerce": "npm run test:e2e:commerce -w apps/commerce",
-        "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand"
+    "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
+    "proto:gen": "npx proto-loader-gen-types --grpcLib=@grpc/grpc-js --outDir=./apps/photos/src/protos ./contracts/*.proto"
   },
   "devDependencies": {
+    "@grpc/grpc-js": "^1.14.4",
+    "@grpc/proto-loader": "^0.8.1",
     "@types/jest": "^30.0.0",
     "jest": "^30.3.0",
-    "ts-jest": "^29.4.9"
+    "nestjs-grpc": "^1.5.2",
+    "ts-jest": "^29.4.9",
+    "ts-proto": "^2.12.1"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.2.3",
+    "@nestjs/core": "^11.2.3",
+    "@nestjs/microservices": "^11.2.3",
+    "@nestjs/platform-express": "^11.2.3",
+    "@nestjs/testing": "^11.2.3",
+    "file-type": "^16.5.4"
   }
-  
 }

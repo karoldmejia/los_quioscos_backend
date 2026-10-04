@@ -1,0 +1,6 @@
+export enum DocumentType{
+    CEDULA = 'CEDULA',
+    DRIVER_LICENSE = 'DRIVER_LICENSE',
+    SOAT = 'SOAT',
+    OWNERSHIP_CARD = 'OWNERSHIP_CARD'
+}

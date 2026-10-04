@@ -38,12 +38,12 @@ export class ProductsController {
   }
 
   @MessagePattern({ cmd: 'get_kiosk_products' })
-  async getKioskProducts(@Payload() kioskUserId: number): Promise<Product[]> {
+  async getKioskProducts(@Payload() kioskUserId: string): Promise<Product[]> {
     return await this.productService.findAllByKioskUserId(kioskUserId);
   }
 
   @MessagePattern({ cmd: 'get_active_kiosk_products' })
-  async getActiveKioskProducts(@Payload() kioskUserId: number): Promise<Product[]> {
+  async getActiveKioskProducts(@Payload() kioskUserId: string): Promise<Product[]> {
     return await this.productService.findActiveByKioskUserId(kioskUserId);
   }
 
@@ -73,13 +73,13 @@ export class ProductsController {
   }
 
   @MessagePattern({ cmd: 'check_product_name_exists' })
-  async checkProductNameExists(@Payload() payload: { kioskUserId: number; name: string }): Promise<boolean> {
+  async checkProductNameExists(@Payload() payload: { kioskUserId: string; name: string }): Promise<boolean> {
     const { kioskUserId, name } = payload;
     return await this.productService.existsByNameForKiosk(kioskUserId, name);
   }
 
   @MessagePattern({ cmd: 'count_kiosk_products' })
-  async countKioskProducts(@Payload() kioskUserId: number): Promise<number> {
+  async countKioskProducts(@Payload() kioskUserId: string): Promise<number> {
     return await this.productService.countByKiosk(kioskUserId);
   }
 
@@ -89,7 +89,7 @@ export class ProductsController {
   }
 
   @MessagePattern({ cmd: 'get_kiosk_products_by_category' })
-  async getKioskProductsByCategory(@Payload() payload: { kioskUserId: number; category: ProductCategory }): Promise<Product[]> {
+  async getKioskProductsByCategory(@Payload() payload: { kioskUserId: string; category: ProductCategory }): Promise<Product[]> {
     const { kioskUserId, category } = payload;
     return await this.productService.findProductsByKioskAndCategory(kioskUserId, category);
   }

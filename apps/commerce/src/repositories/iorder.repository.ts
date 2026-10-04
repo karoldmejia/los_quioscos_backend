@@ -1,5 +1,5 @@
 import { Order } from "../entities/order.entity";
-import { OrderStatus } from "../enums/order-status.enum";
+import { OrderStatus } from "../enums/order.enum";
 
 export abstract class IOrderRepository {
   abstract create(orderData: Partial<Order>): Promise<Order>;
@@ -16,11 +16,11 @@ export abstract class IOrderRepository {
   abstract findByUserId(userId: string): Promise<Order[]>;
   abstract findByUserIdWithItems(userId: string): Promise<Order[]>;
 
-  abstract findByKioskUserId(kioskUserId: number): Promise<Order[]>;
-  abstract findByKioskUserIdWithItems(kioskUserId: number): Promise<Order[]>;
+  abstract findByKioskUserId(kioskUserId: string): Promise<Order[]>;
+  abstract findByKioskUserIdWithItems(kioskUserId: string): Promise<Order[]>;
 
   abstract findByStatus(status: OrderStatus): Promise<Order[]>;
-  abstract findByKioskAndStatus(kioskUserId: number, status: OrderStatus): Promise<Order[]>;
+  abstract findByKioskAndStatus(kioskUserId: string, status: OrderStatus): Promise<Order[]>;
 
   abstract markAccepted(orderId: string): Promise<void>;
   abstract markRejected(orderId: string): Promise<void>;

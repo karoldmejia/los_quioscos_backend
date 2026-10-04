@@ -1,12 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany, ManyToOne, JoinColumn, OneToOne } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany, ManyToOne, JoinColumn, OneToOne, DeleteDateColumn } from 'typeorm';
 import { Role } from './role.entity';
 import { KioskProfile } from './kiosk_profile.entity';
+import { CarrierProfile } from './carrier_profile.entity';
+import { Address } from './address.entity';
 
 @Entity()
 export class User {
-  [x: string]: any;
-  @PrimaryGeneratedColumn()
-  user_id: number;
+  @PrimaryGeneratedColumn('uuid')
+  user_id: string;
 
   @Column({ type: 'varchar', nullable: true })
   username: string | null;
@@ -20,19 +21,22 @@ export class User {
   @Column({ type: 'varchar', nullable: true })
   password: string | null;
 
-  @Column({ type: 'varchar', nullable: true })
-  profile_photo_url: string | null;
+  @Column({ type: 'uuid', nullable: true })
+  profile_photo: string | null;
 
   @ManyToOne(() => Role, { onDelete: 'SET NULL' })
   @JoinColumn({ name: 'role_id' })
   role: Role | null;
-  
-  @Column({type: 'timestamp', nullable: true, default: null})
+
+  @DeleteDateColumn()
   deletedAt: Date | null;
 
-  @OneToOne(() => KioskProfile, (profile) => profile.user, {cascade: true,onDelete: 'CASCADE'})
-  @JoinColumn({ name: 'userId' })
-  kioskProfile: KioskProfile;
+  @OneToOne(() => KioskProfile, (profile) => profile.user, { cascade: true, onDelete: 'CASCADE' })
+  kioskProfile: KioskProfile | null;
 
+  @OneToOne(() => CarrierProfile, (profile) => profile.user, { cascade: true, onDelete: 'CASCADE' })
+  carrierProfile: CarrierProfile | null;
 
+  @OneToMany(() => Address, (address) => address.user, { cascade: true })
+  addresses: Address[]
 }

@@ -1,4 +1,40 @@
 services:
+
+  photos:
+    build:
+      context: ./apps/photos
+      dockerfile: Dockerfile
+    container_name: photos
+    ports:
+      - "3002:3000"
+      - "50052:50052"
+    env_file:
+      - .env
+    environment:
+      # Variables específicas para photos
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_DATABASE: ${DB_NAME}
+      GRPC_PORT: 50052
+      UPLOAD_PATH: /app/uploads
+    volumes:
+      - ./apps/photos:/app
+      - /app/node_modules
+      - ./contracts:/app/contracts
+      - photos_uploads:/app/uploads
+    working_dir: /app
+    command: npm run start:dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    restart: unless-stopped
+
   users:
     build:
       context: ./apps/users
@@ -6,6 +42,7 @@ services:
     container_name: users
     ports:
       - "3001:3000"
+      - "50051:50051"
     env_file:
       - .env
     volumes:
@@ -42,6 +79,44 @@ services:
       - ./contracts:/app/contracts
     working_dir: /app
     command: npm run start:dev
+
+  logistics:
+    build:
+      context: ./go/logistics
+      dockerfile: Dockerfile
+    container_name: logistics
+    env_file:
+      - .env
+    environment:
+      KAFKA_BROKERS: kafka:9092
+      KAFKA_TOPIC_ORDER_PAID: order.paid
+      KAFKA_GROUP_ID: logistics-group
+      DATABASE_URL: host=postgres-logistics user=${DB_USER} password=${DB_PASSWORD} dbname=${DB_NAME} port=5432 sslmode=disable
+    depends_on:
+      postgres-logistics:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    restart: unless-stopped
+
+  postgres-logistics:
+    image: postgis/postgis:16-3.4
+    container_name: postgres-logistics
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_logistics_data:/var/lib/postgresql/data
+      - ./docker/postgres-logistics/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
 
   mongodb:
     image: mongo:6
@@ -114,9 +189,11 @@ services:
 
 volumes:
   postgres_data:
+  postgres_logistics_data:
   redis_data:
   kafka_data:
   mongo_data:
   temp_files:
   insightface_models:
   contracts:
+  photos_uploads:

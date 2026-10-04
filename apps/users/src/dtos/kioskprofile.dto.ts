@@ -1,5 +1,5 @@
 export class KioskProfileDto {
-  userId: number;
+  userId: string;
   fullLegalName?: string;
   idNumber?: string;
   kioskName?: string;

@@ -5,7 +5,7 @@ import warnings
 
 import documents_pb2 as documents__pb2
 
-GRPC_GENERATED_VERSION = '1.76.0'
+GRPC_GENERATED_VERSION = '1.83.1'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -25,7 +25,7 @@ if _version_not_supported:
     )
 
 
-class DocumentServiceStub(object):
+class DocumentServiceStub:
     """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
@@ -41,7 +41,7 @@ class DocumentServiceStub(object):
                 _registered_method=True)
 
 
-class DocumentServiceServicer(object):
+class DocumentServiceServicer:
     """Missing associated documentation comment in .proto file."""
 
     def ValidateDocument(self, request, context):
@@ -66,7 +66,7 @@ def add_DocumentServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class DocumentService(object):
+class DocumentService:
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod

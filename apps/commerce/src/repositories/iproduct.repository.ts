@@ -16,12 +16,12 @@ export abstract class IProductRepository {
   abstract findByIdIncludingDeleted(productId: string): Promise<Product | null>;
   abstract findAll(): Promise<Product[]>;
 
-  abstract findAllByKioskUserId(kioskUserId: number): Promise<Product[]>;
-  abstract findActiveByKioskUserId(kioskUserId: number): Promise<Product[]>;
+  abstract findAllByKioskUserId(kioskUserId: string): Promise<Product[]>;
+  abstract findActiveByKioskUserId(kioskUserId: string): Promise<Product[]>;
   abstract findActiveByCategory(category: ProductCategory): Promise<Product[]>;
   abstract searchActiveByName(query: string): Promise<Product[]>;
-  abstract existsByNameForKiosk(kioskUserId: number, name: string): Promise<boolean>;
-  abstract countByKiosk(kioskUserId: number): Promise<number>;
+  abstract existsByNameForKiosk(kioskUserId: string, name: string): Promise<boolean>;
+  abstract countByKiosk(kioskUserId: string): Promise<number>;
   abstract findRecentlyAdded(limit: number): Promise<Product[]>;
-  abstract findProductsByKioskAndCategory(kioskUserId: number, category: ProductCategory): Promise<Product[]>;
+  abstract findProductsByKioskAndCategory(kioskUserId: string, category: ProductCategory): Promise<Product[]>;
 }

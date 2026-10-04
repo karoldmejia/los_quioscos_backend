@@ -5,6 +5,7 @@ import { CartToCheckoutDto } from '../dtos/cart-to-checkout.dto';
 import { CheckoutSessionResponseDto } from '../dtos/checkout-session-response.dto';
 import { CheckoutSession } from '../entities/checkout-session.entity';
 import { Order } from '../entities/order.entity';
+import { LogisticsLoadDto } from 'src/dtos/order-generation.dto';
 
 @Controller()
 export class CheckoutController {
@@ -22,9 +23,9 @@ export class CheckoutController {
    * Process kiosk response for an order (accept/reject)
    */
   @MessagePattern({ cmd: 'process_kiosk_response' })
-  async processKioskResponse(@Payload() payload: {orderId: string; kioskUserId: number; accept: boolean;}): Promise<Order> {
-    const { orderId, kioskUserId, accept } = payload;
-    return await this.checkoutService.processKioskResponse(orderId, kioskUserId, accept);
+  async processKioskResponse(@Payload() payload: {orderId: string; kioskUserId: string; accept: boolean;logisticLoad?: LogisticsLoadDto}): Promise<Order> {
+    const { orderId, kioskUserId, accept, logisticLoad } = payload;
+    return await this.checkoutService.processKioskResponse(orderId, kioskUserId, accept, logisticLoad);
   }
 
   /**

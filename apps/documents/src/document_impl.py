@@ -142,6 +142,7 @@ class DocumentService:
         return {
             "success": True,
             "is_valid": is_valid,
+            "document_id": saved_doc.id,
         }
 
     

@@ -1,9 +1,10 @@
-import { Controller } from '@nestjs/common';
+import { Body, Controller, Param, Post } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 
 import { OrderService } from '../services/order.service';
 import { Order } from '../entities/order.entity';
 import { OrderItem } from '../entities/order-item.entity';
+import { LogisticsLoadDto } from 'src/dtos/order-generation.dto';
 
 @Controller()
 export class OrderController {
@@ -20,10 +21,13 @@ export class OrderController {
     });
   }
 
-  @MessagePattern({ cmd: 'accept_order' })
-  async acceptOrder(@Payload() orderId: string): Promise<Order> {
-    return await this.orderService.acceptOrder(orderId);
-  }
+    @Post(':orderId/accept')
+    async acceptOrder(
+        @Param('orderId') orderId: string,
+        @Body() dto: LogisticsLoadDto,
+    ) {
+        return await this.orderService.acceptOrder(orderId, dto);
+    }
 
   @MessagePattern({ cmd: 'reject_order' })
   async rejectOrder(@Payload() orderId: string): Promise<Order> {

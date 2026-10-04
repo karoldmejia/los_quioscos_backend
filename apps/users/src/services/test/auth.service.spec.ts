@@ -48,7 +48,7 @@ describe('AuthService', () => {
 
   describe('validateUser', () => {
     const mockUser: User = {
-      user_id: 1,
+      user_id: 'aa778eb6-7fc6-4757-ae68-612ac4f1837a',
       email: 'test@example.com',
       username: 'testuser',
       phone: '1234567890',
@@ -101,7 +101,7 @@ describe('AuthService', () => {
   describe('login', () => {
     it('should login active user and return JWT', async () => {
       const user = {
-        user_id: 1,
+        user_id: 'aa778eb6-7fc6-4757-ae68-612ac4f1837a',
         email: 'test@mail.com',
         username: 'test',
         phone: '123',
@@ -126,7 +126,7 @@ describe('AuthService', () => {
       const recoverUntil = new Date(Date.now() + 1000 * 60 * 60);
 
       const user = {
-        user_id: 1,
+        user_id: 'aa778eb6-7fc6-4757-ae68-612ac4f1837a',
         email: 'test@mail.com',
         username: 'test',
         phone: '123',
@@ -147,7 +147,7 @@ describe('AuthService', () => {
       const recoverUntil = new Date(Date.now() - 1000);
 
       const user = {
-        user_id: 1,
+        user_id: 'aa778eb6-7fc6-4757-ae68-612ac4f1837a',
         email: 'test@mail.com',
         username: 'test',
         phone: '123',
@@ -167,7 +167,7 @@ describe('AuthService', () => {
       const googleUser = { email: 'oauth@mail.com' };
 
       const mockUser = {
-        user_id: 2,
+        user_id: 'aa778eb6-7fc6-4757-ae68-612ac4f1837a',
         email: 'oauth@mail.com',
         username: 'oauth',
         phone: null,

@@ -7,14 +7,14 @@ import { AuthDto } from '../dtos/auth.dto';
 import { RpcException } from '@nestjs/microservices';
 
 @Injectable()
-export class AuthService{
+export class AuthService {
 
-    constructor (
+    constructor(
         private usersService: UsersService,
         private jwtService: JwtService,
         private passwordService: PasswordService
 
-    ) {}
+    ) { }
 
     async validateUser(dto: AuthDto): Promise<Omit<User, 'password'> | null> {
         const { username, email, phone, password } = dto;
@@ -27,34 +27,35 @@ export class AuthService{
         const results = await Promise.all(checks);
         const user = results.find(u => u != null);
 
-        if(!user) return null
+        if (!user) return null
 
         if (user.password) {
             if (!password) return null;
             const passwordValid = await this.passwordService.comparePassword(
-            password,
-            user.password,
+                password,
+                user.password,
             );
             if (!passwordValid) return null;
-        } 
-    
+        }
+
         const { password: _, ...userWithoutPassword } = user;
         return userWithoutPassword;
 
     }
 
-    async login(user: Omit<User, 'password'>){
-        const maxRecovDate = this.usersService.getRecoveryDate(user.deletedAt);
-        if (user.deletedAt){
-            if (new Date()<=maxRecovDate){
+    async login(user: Omit<User, 'password'>) {
+        if (user.deletedAt) {
+
+            const maxRecovDate = this.usersService.getRecoveryDate(user.deletedAt);
+            if (new Date() <= maxRecovDate) {
                 await this.usersService.recoverAccount(user.user_id);
             } else {
                 throw new RpcException('Invalid credentials');
             }
         }
-        const payload = {sub: user.user_id, email: user.email, phone: user.phone, username: user.username}
+        const payload = { sub: user.user_id, email: user.email, phone: user.phone, username: user.username }
         return {
-            access_token: this. jwtService.sign(payload)
+            access_token: this.jwtService.sign(payload)
         }
     }
 

@@ -3,7 +3,7 @@ import { Cron, CronExpression } from "@nestjs/schedule";
 
 import { OrderRepository } from "../repositories/impl/order.repository";
 import { OrderService } from "./order.service";
-import { OrderStatus } from "../enums/order-status.enum";
+import { OrderStatus } from "src/enums/order.enum";
 
 @Injectable()
 export class OrderMaintenanceService {

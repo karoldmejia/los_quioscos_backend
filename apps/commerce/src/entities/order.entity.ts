@@ -1,8 +1,10 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany, ManyToOne, JoinColumn } from 'typeorm';
 import { CheckoutSession } from './checkout-session.entity';
-import { OrderStatus } from '../enums/order-status.enum';
 import { OrderItem } from './order-item.entity';
 import { BatchReservation } from './batch-reservation.entity';
+import { DeliveryMode } from 'src/enums/delivery-mode.enum';
+import { OrderStatus } from 'src/enums/order.enum';
+import { LogisticsLoadDto } from 'src/dtos/order-generation.dto';
 
 @Entity('orders')
 export class Order {
@@ -19,8 +21,8 @@ export class Order {
     @Column({ type: 'uuid' })
     userId: string;
 
-    @Column({ type: 'int' })
-    kioskUserId: number;
+    @Column({ type: 'uuid' })
+    kioskUserId: string;
 
     @Column({ type: 'enum', enum: OrderStatus, default: OrderStatus.PENDING_KIOSK_CONFIRMATION })
     status: OrderStatus;
@@ -40,8 +42,11 @@ export class Order {
     @Column({ type: 'timestamp', nullable: true })
     expiresAt: Date;
 
+    @Column({ type: 'enum', enum: DeliveryMode, default: DeliveryMode.INDIVIDUAL })
+    deliveryMode: DeliveryMode;
+
     @Column({ type: 'jsonb', nullable: true })
-    shippingInfo: any;
+    logisticsLoad?: LogisticsLoadDto;
 
     @Column({ type: 'jsonb', nullable: true })
     paymentInfo: any;

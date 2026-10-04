@@ -4,21 +4,21 @@ import { DocumentServiceGrpc } from '../grpc/documents.interface';
 import { lastValueFrom } from 'rxjs';
 
 @Injectable()
-export class DocumentsValidationService implements OnModuleInit{
+export class DocumentsValidationService implements OnModuleInit {
     private documentsService: DocumentServiceGrpc;
-    
-  constructor(
-    @Inject('DOCUMENTS_GRPC') private readonly client: ClientGrpc,
-  ) {}
 
-      onModuleInit() {
-          this.documentsService =
-          this.client.getService<DocumentServiceGrpc>('DocumentService');
-      }
-  
+    constructor(
+        @Inject('DOCUMENTS_GRPC') private readonly client: ClientGrpc,
+    ) { }
 
-    async validateDocument(userId: number, docTypeId: string, files: Buffer[], selfie?: Buffer) {
-        const request: any = {user_id: userId, doc_type_id: docTypeId, files};
+    onModuleInit() {
+        this.documentsService =
+            this.client.getService<DocumentServiceGrpc>('DocumentService');
+    }
+
+
+    async validateDocument(userId: string, docTypeId: string, files: Buffer[], selfie?: Buffer) {
+        const request: any = { user_id: userId, doc_type_id: docTypeId, files };
         if (selfie) {
             request.selfie = selfie;
         }

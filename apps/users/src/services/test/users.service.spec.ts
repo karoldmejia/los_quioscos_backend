@@ -1,12 +1,12 @@
 import { Test } from '@nestjs/testing';
 import { UsersService } from '../users.service';
-import { UserRepository } from '../../repositories/impl/users.repository';
 import { PasswordService } from '../password.service';
 import { PhoneVerificationService } from '../phoneverification.service';
 import { UserDto } from '../../dtos/users.dto';
 import { RpcException } from '@nestjs/microservices';
 import { User } from '../../entities/user.entity';
 import { RolesService } from '../roles.service';
+import { getRepositoryToken } from '@nestjs/typeorm';
 
 describe('UsersService', () => {
   let service: UsersService;
@@ -44,7 +44,7 @@ describe('UsersService', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         UsersService,
-        { provide: UserRepository, useValue: userRepoMock },
+        { provide: getRepositoryToken(User), useValue: userRepoMock },
         { provide: PasswordService, useValue: passwordServiceMock },
         { provide: PhoneVerificationService, useValue: phoneVerificationMock },
         { provide: RolesService, useValue: roleServiceMock },
@@ -65,7 +65,7 @@ describe('UsersService', () => {
   });
 
   it('should throw if email already exists', async () => {
-    userRepoMock.findByEmail.mockResolvedValue({ user_id: 1 });
+    userRepoMock.findByEmail.mockResolvedValue({ user_id: 'aa778eb6-7fc6-4757-ae68-612ac4f1837a' });
 
     await expect(service.createUser(validDto)).rejects.toThrow(
       'Email already in use',
@@ -74,7 +74,7 @@ describe('UsersService', () => {
 
   it('should throw if phone already exists', async () => {
     userRepoMock.findByEmail.mockResolvedValue(null);
-    userRepoMock.findByPhone.mockResolvedValue({ user_id: 1 });
+    userRepoMock.findByPhone.mockResolvedValue({ user_id: 'aa778eb6-7fc6-4757-ae68-612ac4f1837a' });
 
     await expect(service.createUser(validDto)).rejects.toThrow(
       'Phone already in use',
@@ -96,20 +96,20 @@ describe('UsersService', () => {
     userRepoMock.findByPhone.mockResolvedValue(null);
     phoneVerificationMock.verifyOtp.mockResolvedValue(true);
     passwordServiceMock.hashPassword.mockResolvedValue('hashed-password');
-    userRepoMock.save.mockResolvedValue({ user_id: 1 });
+    userRepoMock.save.mockResolvedValue({ user_id: 'aa778eb6-7fc6-4757-ae68-612ac4f1837a' });
 
     const result = await service.createUser(validDto);
 
     expect(passwordServiceMock.hashPassword).toHaveBeenCalledWith('Password1!');
     expect(userRepoMock.save).toHaveBeenCalled();
-    expect(result).toEqual({ user_id: 1 });
+    expect(result).toEqual({ user_id: 'aa778eb6-7fc6-4757-ae68-612ac4f1837a' });
   });
 
   // createOAuthUser
 
   describe('createOAuthUser', () => {
     it('should return existing user if email already exists', async () => {
-      const existingUser = { user_id: 1, email: 'oauth@mail.com' };
+      const existingUser = { user_id: 'aa778eb6-7fc6-4757-ae68-612ac4f1837a', email: 'oauth@mail.com' };
       service.findUserByEmail = jest.fn().mockResolvedValue(existingUser);
 
       const result = await service.createOAuthUser({
@@ -150,43 +150,43 @@ describe('UsersService', () => {
     it('should throw if user does not exist', async () => {
       service.findUserById = jest.fn().mockResolvedValue(null);
 
-      await expect(service.addRoleToUser(1, 1)).rejects.toThrow(
+      await expect(service.addRoleToUser('aa778eb6-7fc6-4757-ae68-612ac4f1837a', 1)).rejects.toThrow(
         'User not found',
       );
     });
 
     it('should throw if user is deleted', async () => {
       service.findUserById = jest.fn().mockResolvedValue({
-        user_id: 1,
+        user_id: 'aa778eb6-7fc6-4757-ae68-612ac4f1837a',
         deletedAt: new Date(),
       });
 
-      await expect(service.addRoleToUser(1, 1)).rejects.toThrow(
+      await expect(service.addRoleToUser('aa778eb6-7fc6-4757-ae68-612ac4f1837a', 1)).rejects.toThrow(
         'User not found',
       );
     });
 
     it('should throw if role does not exist', async () => {
       service.findUserById = jest.fn().mockResolvedValue({
-        user_id: 1,
+        user_id: 'aa778eb6-7fc6-4757-ae68-612ac4f1837a',
         deletedAt: null,
       });
       roleServiceMock.getRole.mockResolvedValue(null);
 
-      await expect(service.addRoleToUser(1, 99)).rejects.toThrow(
+      await expect(service.addRoleToUser('aa778eb6-7fc6-4757-ae68-612ac4f1837a', 99)).rejects.toThrow(
         'Role not found',
       );
     });
 
     it('should assign role successfully', async () => {
-      const user = { user_id: 1, deletedAt: null, role: null };
+      const user = { user_id: 'aa778eb6-7fc6-4757-ae68-612ac4f1837a', deletedAt: null, role: null };
       const role = { id: 2, name: 'Admin' };
 
       service.findUserById = jest.fn().mockResolvedValue(user);
       roleServiceMock.getRole.mockResolvedValue(role);
       userRepoMock.save.mockResolvedValue(user);
 
-      const result = await service.addRoleToUser(1, 2);
+      const result = await service.addRoleToUser('aa778eb6-7fc6-4757-ae68-612ac4f1837a', 2);
 
       expect(user.role).toBe(role);
       expect(userRepoMock.save).toHaveBeenCalledWith(user);
@@ -200,41 +200,41 @@ describe('UsersService', () => {
     it('should throw if user does not exist', async () => {
       service.findUserById = jest.fn().mockResolvedValue(null);
 
-      await expect(service.deleteUserRole(1)).rejects.toThrow(
+      await expect(service.deleteUserRole('aa778eb6-7fc6-4757-ae68-612ac4f1837a')).rejects.toThrow(
         'User not found',
       );
     });
 
     it('should throw if user is deleted', async () => {
       service.findUserById = jest.fn().mockResolvedValue({
-        user_id: 1,
+        user_id: 'aa778eb6-7fc6-4757-ae68-612ac4f1837a',
         deletedAt: new Date(),
       });
 
-      await expect(service.deleteUserRole(1)).rejects.toThrow(
+      await expect(service.deleteUserRole('aa778eb6-7fc6-4757-ae68-612ac4f1837a')).rejects.toThrow(
         'User not found',
       );
     });
 
     it('should throw if user has no role', async () => {
       service.findUserById = jest.fn().mockResolvedValue({
-        user_id: 1,
+        user_id: 'aa778eb6-7fc6-4757-ae68-612ac4f1837a',
         deletedAt: null,
         role: null,
       });
 
-      await expect(service.deleteUserRole(1)).rejects.toThrow(
+      await expect(service.deleteUserRole('aa778eb6-7fc6-4757-ae68-612ac4f1837a')).rejects.toThrow(
         'Users role not found',
       );
     });
 
     it('should remove role successfully', async () => {
-      const user = { user_id: 1, deletedAt: null, role: { id: 2 } };
+      const user = { user_id: 'aa778eb6-7fc6-4757-ae68-612ac4f1837a', deletedAt: null, role: { id: 2 } };
 
       service.findUserById = jest.fn().mockResolvedValue(user);
       userRepoMock.save.mockResolvedValue(user);
 
-      const result = await service.deleteUserRole(1);
+      const result = await service.deleteUserRole('aa778eb6-7fc6-4757-ae68-612ac4f1837a');
 
       expect(user.role).toBeNull();
       expect(userRepoMock.save).toHaveBeenCalledWith(user);
@@ -245,7 +245,7 @@ describe('UsersService', () => {
   // resetPassword
 
   describe('resetPassword', () => {
-    const userId = 1;
+    const userId = 'aa778eb6-7fc6-4757-ae68-612ac4f1837a';
     const validPassword = 'Password1!';
 
     it('should throw if user does not exist', async () => {
@@ -258,7 +258,7 @@ describe('UsersService', () => {
 
     it('should throw if user has no phone registered', async () => {
       userRepoMock.findByUser_Id.mockResolvedValue({
-        user_id: 1,
+        user_id: 'aa778eb6-7fc6-4757-ae68-612ac4f1837a',
         phone: null,
         deletedAt: null,
       });
@@ -270,7 +270,7 @@ describe('UsersService', () => {
 
     it('should throw if otp is invalid', async () => {
       userRepoMock.findByUser_Id.mockResolvedValue({
-        user_id: 1,
+        user_id: 'aa778eb6-7fc6-4757-ae68-612ac4f1837a',
         phone: '+573001234567',
         deletedAt: null,
       });
@@ -283,7 +283,7 @@ describe('UsersService', () => {
 
     it('should reset password successfully', async () => {
       userRepoMock.findByUser_Id.mockResolvedValue({
-        user_id: 1,
+        user_id: 'aa778eb6-7fc6-4757-ae68-612ac4f1837a',
         phone: '+573001234567',
         password: 'old-hash',
         deletedAt: null,
@@ -312,7 +312,7 @@ describe('UsersService', () => {
       service.findUserById = jest.fn().mockResolvedValue(null);
 
       await expect(
-        service.updateUserContactInfo(1, { email: 'a@mail.com' }, 'pass'),
+        service.updateUserContactInfo('aa778eb6-7fc6-4757-ae68-612ac4f1837a', { email: 'a@mail.com' }, 'pass'),
       ).rejects.toThrow('User not found');
     });
 
@@ -324,18 +324,18 @@ describe('UsersService', () => {
       passwordServiceMock.comparePassword.mockResolvedValue(false);
 
       await expect(
-        service.updateUserContactInfo(1, { email: 'a@mail.com' }, 'wrong'),
+        service.updateUserContactInfo('aa778eb6-7fc6-4757-ae68-612ac4f1837a', { email: 'a@mail.com' }, 'wrong'),
       ).rejects.toThrow('Invalid password');
     });
 
     it('should update contact info successfully', async () => {
-      const user = { user_id: 1, password: 'hash', deletedAt: null,};
+      const user = { user_id: 'aa778eb6-7fc6-4757-ae68-612ac4f1837a', password: 'hash', deletedAt: null,};
       service.findUserById = jest.fn().mockResolvedValue(user);
       passwordServiceMock.comparePassword.mockResolvedValue(true);
       service.findUserByEmail = jest.fn().mockResolvedValue(null);
 
       const result = await service.updateUserContactInfo(
-        1,
+        'aa778eb6-7fc6-4757-ae68-612ac4f1837a',
         { email: 'new@mail.com' },
         'pass',
       );
@@ -352,15 +352,15 @@ describe('UsersService', () => {
       service.findUserById = jest.fn().mockResolvedValue(null);
 
       await expect(
-        service.updateUserUsername(1, 'newname'),
+        service.updateUserUsername('aa778eb6-7fc6-4757-ae68-612ac4f1837a', 'newname'),
       ).rejects.toThrow('User not found');
     });
 
     it('should update username successfully', async () => {
-      service.findUserById = jest.fn().mockResolvedValue({ user_id: 1, username: 'oldname', deletedAt: null,});
+      service.findUserById = jest.fn().mockResolvedValue({ user_id: 'aa778eb6-7fc6-4757-ae68-612ac4f1837a', username: 'oldname', deletedAt: null,});
       userRepoMock.save.mockResolvedValue(true);
 
-      const result = await service.updateUserUsername(1, 'newname');
+      const result = await service.updateUserUsername('aa778eb6-7fc6-4757-ae68-612ac4f1837a', 'newname');
 
       expect(userRepoMock.save).toHaveBeenCalled();
       expect(result).toEqual({ message: 'Username has been updated' });
@@ -373,7 +373,7 @@ describe('UsersService', () => {
     it('should throw if user does not exist', async () => {
       service.findUserById = jest.fn().mockResolvedValue(null);
 
-      await expect(service.deleteUser(1)).rejects.toThrow('User not found');
+      await expect(service.deleteUser('aa778eb6-7fc6-4757-ae68-612ac4f1837a')).rejects.toThrow('User not found');
     });
 
     it('should soft delete user and return recovery date', async () => {
@@ -381,14 +381,14 @@ describe('UsersService', () => {
       jest.useFakeTimers().setSystemTime(now);
 
       const user = {
-        user_id: 1,
+        user_id: 'aa778eb6-7fc6-4757-ae68-612ac4f1837a',
         deletedAt: null,
       };
 
       service.findUserById = jest.fn().mockResolvedValue(user);
       userRepoMock.save.mockResolvedValue(user);
 
-      const result = await service.deleteUser(1);
+      const result = await service.deleteUser('aa778eb6-7fc6-4757-ae68-612ac4f1837a');
 
       expect(user.deletedAt).toEqual(now);
       expect(userRepoMock.save).toHaveBeenCalledWith(user);
@@ -413,29 +413,29 @@ describe('UsersService', () => {
       userRepoMock.findUserByIdIncludingDeleted
         .mockResolvedValue(null);
 
-      await expect(service.recoverAccount(1))
+      await expect(service.recoverAccount('aa778eb6-7fc6-4757-ae68-612ac4f1837a'))
         .rejects
         .toThrow('User not found');
     });
 
     it('should do nothing if user is already active', async () => {
-      const activeUser = { user_id: 1, deletedAt: null };
+      const activeUser = { user_id: 'aa778eb6-7fc6-4757-ae68-612ac4f1837a', deletedAt: null };
 
       userRepoMock.findUserByIdIncludingDeleted
         .mockResolvedValue(activeUser);
 
-      await service.recoverAccount(1);
+      await service.recoverAccount('aa778eb6-7fc6-4757-ae68-612ac4f1837a');
 
       expect(userRepoMock.save).not.toHaveBeenCalled();
     });
 
     it('should restore deleted user', async () => {
-      const deletedUser = { user_id: 1, deletedAt: new Date() };
+      const deletedUser = { user_id: 'aa778eb6-7fc6-4757-ae68-612ac4f1837a', deletedAt: new Date() };
 
       userRepoMock.findUserByIdIncludingDeleted
         .mockResolvedValue(deletedUser);
 
-      await service.recoverAccount(1);
+      await service.recoverAccount('aa778eb6-7fc6-4757-ae68-612ac4f1837a');
 
       expect(deletedUser.deletedAt).toBeNull();
       expect(userRepoMock.save).toHaveBeenCalledWith(deletedUser);

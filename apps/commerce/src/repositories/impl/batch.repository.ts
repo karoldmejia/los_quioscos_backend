@@ -203,7 +203,7 @@ export class BatchRepository extends IBatchRepository {
             .execute();
     }
 
-    async findActiveByProductIdandKioskId(productId: string, kioskUserId: number, manager?: EntityManager,): Promise<Batch[]> {
+    async findActiveByProductIdandKioskId(productId: string, kioskUserId: string, manager?: EntityManager,): Promise<Batch[]> {
         const repo: Repository<Batch> = manager
             ? manager.getRepository(Batch)
             : this.repo;
@@ -247,7 +247,7 @@ export class BatchRepository extends IBatchRepository {
         });
     }
 
-    async findActiveBatchesWithAvailableStock(productId: string, kioskUserId: number): Promise<Batch[]> {
+    async findActiveBatchesWithAvailableStock(productId: string, kioskUserId: string): Promise<Batch[]> {
         return await this.repo
             .createQueryBuilder('batch')
             .where('batch.productId = :productId', { productId })

@@ -153,14 +153,14 @@ export class ProductService {
     /**
      * get all kiosk products
      */
-    async findAllByKioskUserId(kioskUserId: number): Promise<Product[]> {
+    async findAllByKioskUserId(kioskUserId: string): Promise<Product[]> {
         return await this.productRepository.findAllByKioskUserId(kioskUserId);
     }
 
     /**
      * get all kiosks active products
      */
-    async findActiveByKioskUserId(kioskUserId: number): Promise<Product[]> {
+    async findActiveByKioskUserId(kioskUserId: string): Promise<Product[]> {
         return await this.productRepository.findActiveByKioskUserId(kioskUserId);
     }
 
@@ -234,11 +234,11 @@ export class ProductService {
         await this.productRepository.softDelete(id);
     }
 
-    async existsByNameForKiosk(kioskUserId: number, name: string): Promise<boolean> {
+    async existsByNameForKiosk(kioskUserId: string, name: string): Promise<boolean> {
         return await this.productRepository.existsByNameForKiosk(kioskUserId, name);
     }
 
-    async countByKiosk(kioskUserId: number): Promise<number> {
+    async countByKiosk(kioskUserId: string): Promise<number> {
         return await this.productRepository.countByKiosk(kioskUserId);
     }
 
@@ -251,7 +251,7 @@ export class ProductService {
 
 
     async findProductsByKioskAndCategory(
-        kioskUserId: number, 
+        kioskUserId: string, 
         category: ProductCategory
     ): Promise<Product[]> {
         return await this.productRepository.findProductsByKioskAndCategory(kioskUserId, category);

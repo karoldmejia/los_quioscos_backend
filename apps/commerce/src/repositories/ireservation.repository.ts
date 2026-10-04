@@ -19,8 +19,8 @@ export abstract class IBatchReservationRepository {
     abstract findByOrderItemId(orderItemId: string): Promise<BatchReservation[]>;
     abstract findByProductId(productId: string): Promise<BatchReservation[]>;
     abstract findActiveByProductId(productId: string): Promise<BatchReservation[]>;
-    abstract findByKioskUserId(kioskUserId: number): Promise<BatchReservation[]>;
-    abstract findActiveByKioskUserId(kioskUserId: number): Promise<BatchReservation[]>;
+    abstract findByKioskUserId(kioskUserId: string): Promise<BatchReservation[]>;
+    abstract findActiveByKioskUserId(kioskUserId: string): Promise<BatchReservation[]>;
     abstract findByStatus(status: ReservationStatus): Promise<BatchReservation[]>;
     
     abstract findActiveReservationsByBatch(batchId: string): Promise<BatchReservation[]>;

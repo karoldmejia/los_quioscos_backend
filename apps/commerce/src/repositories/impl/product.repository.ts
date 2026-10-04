@@ -73,7 +73,7 @@ export class ProductRepository extends IProductRepository {
         });
     }
 
-    async findAllByKioskUserId(kioskUserId: number): Promise<Product[]> {
+    async findAllByKioskUserId(kioskUserId: string): Promise<Product[]> {
         return await this.repo.find({
             where: { 
                 kioskUserId,
@@ -83,7 +83,7 @@ export class ProductRepository extends IProductRepository {
         });
     }
 
-    async findActiveByKioskUserId(kioskUserId: number): Promise<Product[]> {
+    async findActiveByKioskUserId(kioskUserId: string): Promise<Product[]> {
         return await this.repo.find({
             where: { 
                 kioskUserId,
@@ -120,7 +120,7 @@ export class ProductRepository extends IProductRepository {
         });
     }
 
-    async existsByNameForKiosk(kioskUserId: number, name: string): Promise<boolean> {
+    async existsByNameForKiosk(kioskUserId: string, name: string): Promise<boolean> {
         const count = await this.repo.count({
             where: { 
                 kioskUserId,
@@ -130,7 +130,7 @@ export class ProductRepository extends IProductRepository {
         return count > 0;
     }
 
-    async countByKiosk(kioskUserId: number): Promise<number> {
+    async countByKiosk(kioskUserId: string): Promise<number> {
         return await this.repo.count({
             where: { 
                 kioskUserId,
@@ -148,7 +148,7 @@ export class ProductRepository extends IProductRepository {
         });
     }
 
-    async findProductsByKioskAndCategory(kioskUserId: number, category: ProductCategory): Promise<Product[]> {
+    async findProductsByKioskAndCategory(kioskUserId: string, category: ProductCategory): Promise<Product[]> {
         return await this.repo.find({
             where: { 
                 kioskUserId,

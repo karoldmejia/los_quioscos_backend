@@ -4,7 +4,7 @@ import { UnitMeasure } from '../enums/unit-measure.enum';
 
 export class CreateProductDto {
     @IsNumber()
-    kioskUserId: number;
+    kioskUserId: string;
 
     @IsString()
     @MinLength(2)

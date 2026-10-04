@@ -43,6 +43,6 @@ export abstract class ICheckoutSessionRepository {
     abstract existsForCart(cartId: string): Promise<boolean>;
     
     // kiosks methods
-    abstract findSessionsByKioskUserId(kioskUserId: number): Promise<CheckoutSession[]>;
-    abstract findPendingSessionsByKioskUserId(kioskUserId: number): Promise<CheckoutSession[]>;
+    abstract findSessionsByKioskUserId(kioskUserId: string): Promise<CheckoutSession[]>;
+    abstract findPendingSessionsByKioskUserId(kioskUserId: string): Promise<CheckoutSession[]>;
 }

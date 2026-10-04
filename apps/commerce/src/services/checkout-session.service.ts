@@ -8,10 +8,12 @@ import { Cart } from '../entities/cart.entity';
 import { CheckoutSession } from '../entities/checkout-session.entity';
 import { Order } from '../entities/order.entity';
 import { CheckoutSessionStatus } from '../enums/checkout-session-status.enum';
-import { OrderStatus } from '../enums/order-status.enum';
+import { OrderStatus } from '../enums/order.enum';
 import { CartStatus } from '../enums/cart-status.enum';
 import { CartToCheckoutDto } from '../dtos/cart-to-checkout.dto';
 import { CheckoutSessionResponseDto } from '../dtos/checkout-session-response.dto';
+import { CartService } from './cart.service';
+import { LogisticsLoadDto } from 'src/dtos/order-generation.dto';
 
 @Injectable()
 export class CheckoutService {
@@ -24,6 +26,7 @@ export class CheckoutService {
     private readonly checkoutSessionRepository: CheckoutSessionRepository,
     private readonly productRepository: ProductRepository,
     private readonly orderService: OrderService,
+    private readonly cartService: CartService,
   ) { }
 
   /**
@@ -80,14 +83,18 @@ export class CheckoutService {
       throw new RpcException('Cart is not active');
     }
 
-    if (!cart.items || cart.items.length === 0) {
+    if (!cart.items?.length) {
       throw new RpcException('Cart is empty');
+    }
+
+    const availabilityMap = await this.cartService.validateKiosksAvailability(cart.items)
+    const hasUnavailableItems = cart.items.some(item => availabilityMap.get(item.id) !== true)
+    if (hasUnavailableItems) {
+      throw new RpcException('Some items are not available');
     }
 
     // Validate stock for all items
     for (const item of cart.items) {
-
-
       const product = await this.productRepository.findById(item.productId);
       if (!product || !product.active) {
         throw new RpcException(`Product ${item.productId} is not available`);
@@ -100,8 +107,8 @@ export class CheckoutService {
   /**
    * Group cart items by kiosk with current prices (snapshots)
    */
-  private async groupItemsByKioskWithPrices(cart: Cart): Promise<Map<number, Array<{ productId: string; quantity: number; unitPrice: string; totalPrice: string; productSnapshot: any; }>>> {
-    const groups = new Map<number, Array<{ productId: string; quantity: number; unitPrice: string; totalPrice: string; productSnapshot: any; }>>();
+  private async groupItemsByKioskWithPrices(cart: Cart): Promise<Map<string, Array<{ productId: string; quantity: number; unitPrice: string; totalPrice: string; productSnapshot: any; }>>> {
+    const groups = new Map<string, Array<{ productId: string; quantity: number; unitPrice: string; totalPrice: string; productSnapshot: any; }>>();
 
     for (const item of cart.items) {
       const product = await this.productRepository.findById(item.productId);
@@ -157,7 +164,7 @@ export class CheckoutService {
   /**
    * Create orders for each kiosk
    */
-  private async createKioskOrders(checkoutSession: CheckoutSession, kioskGroups: Map<number, Array<any>>): Promise<Order[]> {
+  private async createKioskOrders(checkoutSession: CheckoutSession, kioskGroups: Map<string, Array<any>>): Promise<Order[]> {
     const orders: Order[] = [];
     for (const [kioskId, items] of kioskGroups) {
       // Calculate subtotal for this kiosk
@@ -211,7 +218,7 @@ export class CheckoutService {
   /**
    * Process kiosk response for an order
    */
-  async processKioskResponse(orderId: string, kioskUserId: number, accept: boolean): Promise<Order> {
+  async processKioskResponse(orderId: string, kioskUserId: string, accept: boolean, logisticsLoad?: LogisticsLoadDto): Promise<Order> {
     const order = await this.orderService.getOrderById(orderId);
 
     if (!order) {
@@ -220,12 +227,16 @@ export class CheckoutService {
     if (order.kioskUserId !== kioskUserId) {
       throw new RpcException('Order does not belong to kiosk');
     }
-    if (accept) {
-      return await this.orderService.acceptOrder(orderId);
-    } else {
-      return await this.orderService.rejectOrder(orderId);
-    }
+  if (!accept) {
+    return await this.orderService.rejectOrder(orderId);
   }
+
+  if (!logisticsLoad) {
+    throw new RpcException('LogisticsLoad is required when accepting an order');
+  }
+
+  return await this.orderService.acceptOrder(orderId, logisticsLoad);
+}
 
   /**
    * Process payment success for checkout session

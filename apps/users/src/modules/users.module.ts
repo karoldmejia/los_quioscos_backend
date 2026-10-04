@@ -3,7 +3,6 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from '../entities/user.entity';
 import { UsersService } from '../services/users.service';
 import { UsersController } from '../controllers/users.controller';
-import { UserRepository } from '../repositories/impl/users.repository';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { join } from 'path';
 import { TwilioService } from '../services/twilio.service';
@@ -22,41 +21,67 @@ import { RolesController } from '../controllers/roles.controller';
 import { PermissionController } from '../controllers/permissions.controller';
 import { KioskProfileController } from '../controllers/kioskprofile.controller';
 import { KioskProfileService } from '../services/kioskprofile.service';
-import { KioskProfileRepository } from '../repositories/impl/kioskprofile.repository';
 import { KioskProfile } from '../entities/kiosk_profile.entity';
 import { DocumentsValidationService } from '../services/documents-validation.service';
+import { CarrierDocument } from '../entities/carrier_document.entity';
+import { CarrierProfile } from '../entities/carrier_profile.entity';
+import { Vehicle } from '../entities/vehicle.entity';
+import { CarrierProfileService } from '../services/carrierprofile.service';
+import { CarrierProfileController } from '../controllers/carrierprofile.controller';
+import { SchedulesService } from '../services/schedules.service';
+import { ScheduleController } from '../controllers/rest/schedule.rest.controller';
+import { ProfileSchedules } from '../entities/profile_schedule.entity';
+import { ScheduleGrpcController } from '../controllers/rpc/schedule.rpc.controller';
+import { Address } from '@/entities/address.entity';
+import { AddressService } from '@/services/address.service';
 
 @Module({
   imports: [
-        ClientsModule.register([
+    ClientsModule.register([
       {
         name: 'DOCUMENTS_GRPC',
         transport: Transport.GRPC,
         options: {
-          url: 'documents:50051',
           package: 'documents',
-          protoPath: join(process.cwd(), 'contracts/documents.proto'),
+          protoPath: '/app/contracts/documents.proto',
+          url: process.env.NODE_ENV === 'production'
+            ? 'documents:50051'
+            : 'localhost:50051',
         },
       },
     ]),
-    TypeOrmModule.forFeature([User, Permission, Role, RolePermission, KioskProfile]),
+    ClientsModule.register([
+      {
+        name: 'PHOTOS_PACKAGE',
+        transport: Transport.GRPC,
+        options: {
+          package: 'photos',
+          protoPath: '/app/contracts/photos.proto',
+          url: process.env.NODE_ENV === 'production'
+            ? 'photos:50052'
+            : 'localhost:50052',
+        },
+      },
+    ]),
+    TypeOrmModule.forFeature([User, Permission, Role, RolePermission, KioskProfile, CarrierDocument, CarrierProfile, Vehicle, ProfileSchedules, Address]),
     RedisModule
   ],
   providers: [UsersService,
-        UserRepository,
-        TwilioService,
-        PhoneVerificationService,
-        PasswordService,
-        RoleRepository,
-        PermissionRepository,
-        RolePermissionRepository,
-        PermissionService,
-        RolesService, 
-        KioskProfileService,
-        KioskProfileRepository,
-        DocumentsValidationService
+    TwilioService,
+    PhoneVerificationService,
+    PasswordService,
+    RoleRepository,
+    PermissionRepository,
+    RolePermissionRepository,
+    PermissionService,
+    RolesService,
+    KioskProfileService,
+    DocumentsValidationService,
+    CarrierProfileService,
+    SchedulesService, 
+    AddressService
   ],
-  controllers: [UsersController, RolesController, PermissionController, KioskProfileController],
-  exports: [UsersService, PasswordService, PermissionService, RolesService, KioskProfileService, DocumentsValidationService],
+  controllers: [UsersController, RolesController, PermissionController, KioskProfileController, CarrierProfileController, ScheduleController, ScheduleGrpcController],
+  exports: [UsersService, PasswordService, PermissionService, RolesService, KioskProfileService, DocumentsValidationService, CarrierProfileService, SchedulesService, AddressService],
 })
-export class UsersModule {}
+export class UsersModule { }

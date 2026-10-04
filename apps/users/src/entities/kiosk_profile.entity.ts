@@ -1,21 +1,25 @@
-import { Entity, PrimaryColumn, Column, JoinColumn, OneToOne } from 'typeorm';
-import { DocumentStatus } from './document_status.enum';
+import { Entity, PrimaryColumn, Column, JoinColumn, OneToOne, OneToMany } from 'typeorm';
+import { DocumentStatus } from '../enums/document_status.enum';
 import { User } from './user.entity';
+import { ProfileSchedules } from './profile_schedule.entity';
 
 @Entity('kiosk_profiles')
 export class KioskProfile {
   @PrimaryColumn()
-  userId: number;
+  userId: string;
 
   @OneToOne(() => User)
-    @JoinColumn({ name: 'userId' })
-    user: User;
+  @JoinColumn({ name: 'userId' })
+  user: User;
 
   @Column()
   fullLegalName: string;
 
   @Column()
-  idNumber: string;
+  idNumber?: string;
+
+  @Column({ type: 'float'})
+  serviceRadiusKm?: number;
 
   @Column()
   kioskName: string;

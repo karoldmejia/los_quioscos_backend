@@ -6,7 +6,7 @@ import { ClientProxy, ClientProxyFactory, Transport } from '@nestjs/microservice
 import * as dotenv from 'dotenv';
 import { ProductCategory } from '../src/enums/product-category.enum';
 import { UnitMeasure } from '../src/enums/unit-measure.enum';
-import { OrderStatus } from '../src/enums/order-status.enum';
+import { OrderStatus } from '../src/enums/order.enum';
 import { randomUUID } from 'crypto';
 import { ReservationStatus } from '../src/enums/reservation-status.enum';
 import { CheckoutSessionStatus } from '../src/enums/checkout-session-status.enum';

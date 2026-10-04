@@ -4,7 +4,7 @@ import { LessThan, Repository } from "typeorm";
 
 import { IOrderRepository } from "../iorder.repository";
 import { Order } from "../../entities/order.entity";
-import { OrderStatus } from "../../enums/order-status.enum";
+import { OrderStatus } from "../../enums/order.enum";
 import { FindManyOrdersFilters } from "../../dtos/order.filters";
 
 @Injectable()
@@ -92,14 +92,14 @@ export class OrderRepository extends IOrderRepository {
     });
   }
 
-  async findByKioskUserId(kioskUserId: number): Promise<Order[]> {
+  async findByKioskUserId(kioskUserId: string): Promise<Order[]> {
     return await this.repo.find({
       where: { kioskUserId },
       order: { createdAt: "DESC" },
     });
   }
 
-  async findByKioskUserIdWithItems(kioskUserId: number): Promise<Order[]> {
+  async findByKioskUserIdWithItems(kioskUserId: string): Promise<Order[]> {
     return await this.repo.find({
       where: { kioskUserId },
       relations: ["items", "items.product"],
@@ -114,7 +114,7 @@ export class OrderRepository extends IOrderRepository {
     });
   }
 
-  async findByKioskAndStatus(kioskUserId: number, status: OrderStatus): Promise<Order[]> {
+  async findByKioskAndStatus(kioskUserId: string, status: OrderStatus): Promise<Order[]> {
     return await this.repo.find({
       where: { kioskUserId, status },
       order: { createdAt: "DESC" },
