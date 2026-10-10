@@ -2,12 +2,14 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"log"
 
 	"github.com/google/uuid"
 	"github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/events"
 	"github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/model"
 	"github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/repository"
+	"github.com/shopspring/decimal"
 )
 
 type DeliveryService struct {
@@ -19,16 +21,16 @@ func NewDeliveryService(repo repository.DeliveryOrderRepository) *DeliveryServic
 }
 
 func (s *DeliveryService) HandleOrderPaid(ctx context.Context, event events.OrderPaidEvent) error {
+	if event.OrderID == "" || event.UserID == "" || event.KioskID == "" {
+		return fmt.Errorf("event missing required fields: orderId=%q", event.OrderID)
+	}
+
 	existing, err := s.repo.FindByOrderID(ctx, event.OrderID)
 	if err != nil {
 		return err
 	}
 	if existing != nil {
 		log.Printf("DeliveryOrder already exists for order %s, skipping", event.OrderID)
-		return nil
-	}
-
-	if err := event.LogisticsLoad.OrderID != event.OrderID; err == true {
 		return nil
 	}
 
@@ -45,6 +47,8 @@ func (s *DeliveryService) HandleOrderPaid(ctx context.Context, event events.Orde
 		return err
 	}
 
+	modelPackages, totalWeight, hasFragile := s.mapPackagesFromEvent(event.LogisticsLoad.Packages)
+
 	order := &model.DeliveryOrder{
 		OrderID:      orderID,
 		UserID:       userID,
@@ -52,12 +56,32 @@ func (s *DeliveryService) HandleOrderPaid(ctx context.Context, event events.Orde
 		DeliveryMode: model.DeliveryMode(event.DeliveryMode),
 		Status:       model.StatusPending,
 	}
-
-	if err := s.repo.Create(ctx, order); err != nil {
-		return err
+	load := &model.LogisticsLoad{
+		TotalWeightKg: totalWeight,
+		IsFragile:     hasFragile,
 	}
 
-	log.Printf("Delivery order created for order %s", event.OrderID)
-	return nil
+	return s.repo.CreateWithLoadAndPackages(ctx, order, load, modelPackages)
+}
 
+func (s *DeliveryService) mapPackagesFromEvent(packages []events.PackageEvent) ([]model.Package, decimal.Decimal, bool) {
+	modelPackages := make([]model.Package, 0, len(packages))
+	totalWeight := decimal.Zero
+	hasFragile := false
+
+	for _, p := range packages {
+		weight := decimal.NewFromFloat(p.WeightKg)
+		modelPackages = append(modelPackages, model.Package{
+			WeightKg:    weight,
+			PackageType: model.PackageType(p.PackageType),
+			IsFragile:   p.IsFragile,
+		})
+
+		totalWeight = totalWeight.Add(weight)
+		if p.IsFragile {
+			hasFragile = true
+		}
+	}
+
+	return modelPackages, totalWeight, hasFragile
 }

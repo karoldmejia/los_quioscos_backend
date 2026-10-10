@@ -74,3 +74,11 @@ export class UploadVehiclePhotosDto {
     @ArrayMinSize(1)
     photos: Buffer[];
 }
+
+export class UpsertVehicleEventDto{
+    vehicleId: string;
+    carrierId: string;
+    maxWeightKg: number;
+    acceptedPackageTypes: PackageType[]
+    updatedAt: string
+}

@@ -35,8 +35,10 @@ type DeliveryOrder struct {
 	UserID  uuid.UUID `gorm:"type:uuid;not null"`
 	KioskID uuid.UUID `gorm:"type:uuid;not null"`
 
+	LogisticsLoad *LogisticsLoad `gorm:"foreignKey:DeliveryOrderID;references:ID"`
+
 	DeliveryMode DeliveryMode   `gorm:"type:varchar(50);not null"`
-	Status       DeliveryStatus `gorm:"type:varchar(50);not null;'PENDING'"`
+	Status       DeliveryStatus `gorm:"type:varchar(50);not null;default:'PENDING'"`
 
 	ScheduledDeliveryDate *time.Time `gorm:"type:timestamptz"`
 
@@ -50,5 +52,5 @@ type DeliveryOrder struct {
 	CancelledAt   *time.Time `gorm:"type:timestamptz"`
 	CompletedAt   *time.Time `gorm:"type:timestamptz"`
 	CreatedAt     time.Time  `gorm:"type:timestamptz;autoCreateTime"`
-	UpdatedAt     time.Time  `gorm:"type:timestamptz:autoUpdateTime"`
+	UpdatedAt     time.Time  `gorm:"type:timestamptz;autoUpdateTime"`
 }

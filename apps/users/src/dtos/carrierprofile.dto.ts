@@ -1,11 +1,11 @@
 import { CarrierProfile } from '../entities/carrier_profile.entity';
-import { IsNotEmpty, IsNumber, IsString, Length } from 'class-validator'; 
+import { IsBoolean, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Length, Min } from 'class-validator';
 
-export class CreateCarrierProfileDto{
+export class CreateCarrierProfileDto {
     @IsNotEmpty()
-    @IsNumber()
+    @IsString()
     userId: string;
-    
+
     @IsNotEmpty()
     @IsString()
     @Length(1, 100)
@@ -17,12 +17,38 @@ export class CreateCarrierProfileDto{
     idNumber: string;
 }
 
-export class UpdateCarrierProfileDto implements Partial<CarrierProfile>{
+export class UpdateCarrierProfileDto {
     @IsNotEmpty()
-    @IsNumber()
+    @IsUUID()
     userId: string;
 
+    @IsOptional()
     @IsString()
     @Length(1, 100)
     fullLegalName?: string;
+
+    @IsOptional()
+    @IsNumber()
+    @Min(1)
+    serviceRadiusKm?: number;
+
+    @IsOptional()
+    @IsBoolean()
+    isAcceptingRoutes?: boolean;
+}
+
+export class CarrierActivatedEventDto {
+    userId: string;
+    serviceRadiusKm: number;
+    baseLatitude: number;
+    baseLongitude: number;
+    isAcceptingRoutes: boolean;
+    activatedAt: string;
+}
+
+export class CarrierUpdatedEventDto {
+    userId: string;
+    serviceRadiusKm?: number;
+    isAcceptingRoutes?: boolean;
+    updatedAt: string;
 }

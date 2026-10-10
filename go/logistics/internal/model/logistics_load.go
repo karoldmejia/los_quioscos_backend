@@ -1,32 +1,36 @@
 package model
 
 import (
-	"github.com/google/uuid"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 )
 
 type PackageType string
 
 const (
-	BOX      PackageType = "BOX"
-	BAG      PackageType = "BAG"
-	ENVELOPE PackageType = "ENVELOPE"
-	PALLET   PackageType = "PALLET"
-	COSTAL   PackageType = "COSTAL"
-	OTHER    PackageType = "OTHER"
+	PackageTypeBox      PackageType = "BOX"
+	PackageTypeBag      PackageType = "BAG"
+	PackageTypeEnvelope PackageType = "ENVELOPE"
+	PackageTypePallet   PackageType = "PALLET"
+	PackageTypeCostal   PackageType = "COSTAL"
+	PackageTypeOther    PackageType = "OTHER"
 )
 
 type Package struct {
-	WeightKg    decimal.Decimal `gorm:"type:decimal(10,2);not null" json:"weightKg"`
-	PackageType PackageType     `gorm:"type:varchar(100);not null" json:"packageType"`
-	IsFragile   bool            `gorm:"default:false" json:"isFragile"`
+	ID              uuid.UUID       `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	LogisticsLoadID uuid.UUID       `gorm:"type:uuid;not null;index"`
+	WeightKg        decimal.Decimal `gorm:"type:decimal(10,2);not null"`
+	PackageType     PackageType     `gorm:"type:varchar(50);not null"`
+	IsFragile       bool            `gorm:"default:false"`
 }
 
 type LogisticsLoad struct {
-	ID            uuid.UUID       `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-	OrderID       string          `gorm:"primaryKey" json:"orderId"`
-	Packages      []Package       `gorm:"serializer:json;type:jsonb" json:"packages"`
-	TotalWeightKg decimal.Decimal `gorm:"type:decimal(10,2);not null" json:"weightKg"`
-	HasFragile    bool            `gorm:"default:false"`
+	ID              uuid.UUID       `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	DeliveryOrderID uuid.UUID       `gorm:"type:uuid;not null;uniqueIndex"`
+	Packages        []Package       `gorm:"foreignKey:LogisticsLoadID"`
+	TotalWeightKg   decimal.Decimal `gorm:"type:decimal(10,2);not null"`
+	IsFragile       bool            `gorm:"not null;default:false"`
+	CreatedAt       time.Time       `gorm:"type:timestamptz;autoCreateTime"`
 }

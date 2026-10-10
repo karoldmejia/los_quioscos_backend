@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsNumber } from "class-validator";
+import { IsNotEmpty, IsNumber, IsString } from "class-validator";
 
 export class UserDto {
   email: string;
@@ -9,7 +9,7 @@ export class UserDto {
 }
 
 export class UploadProfilePhotoDto {
-    @IsNumber()
+    @IsString()
     userId: string;
 
     @IsNotEmpty()

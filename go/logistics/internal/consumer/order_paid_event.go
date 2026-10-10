@@ -6,15 +6,14 @@ import (
 	"log"
 	"time"
 
-	"github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/events"
 	"github.com/segmentio/kafka-go"
 )
 
-type OrderCreatedConsumer struct {
+type Consumer[T any] struct {
 	reader *kafka.Reader
 }
 
-func NewOrderCreatedConsumer(brokers []string, topic, groupID string) *OrderCreatedConsumer {
+func NewConsumer[T any](brokers []string, topic, groupID string) *Consumer[T] {
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:        brokers,
 		Topic:          topic,
@@ -23,10 +22,10 @@ func NewOrderCreatedConsumer(brokers []string, topic, groupID string) *OrderCrea
 		MaxBytes:       10e6,
 		CommitInterval: 0,
 	})
-	return &OrderCreatedConsumer{reader: reader}
+	return &Consumer[T]{reader: reader}
 }
 
-func (c *OrderCreatedConsumer) Start(ctx context.Context, handler func(events.OrderPaidEvent) error) {
+func (c *Consumer[T]) Start(ctx context.Context, handler func(context.Context, T) error) {
 	defer c.reader.Close()
 
 	for {
@@ -44,13 +43,13 @@ func (c *OrderCreatedConsumer) Start(ctx context.Context, handler func(events.Or
 			continue
 		}
 
-		var event events.OrderPaidEvent
+		var event T
 		if err := json.Unmarshal(msg.Value, &event); err != nil {
 			log.Printf("error unmarshalling message: %v", err)
 			continue
 		}
 
-		if err := handler(event); err != nil {
+		if err := handler(ctx, event); err != nil {
 			log.Printf("error handling event: %v", err)
 			continue
 		}

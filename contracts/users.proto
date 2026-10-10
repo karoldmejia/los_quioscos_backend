@@ -5,6 +5,7 @@ package users;
 service UsersService {
     rpc GetKiosksAvailability (KiosksAvailabilityRequest) returns (KiosksAvailabilityResponse);
     rpc GetUserProfile (GetUserProfileRequest) returns (UserProfile);
+    rpc GetUserAddress (GetUserAddressRequest) returns (GetUserAddressResponse);
 }
 
 message KiosksAvailabilityRequest {
@@ -29,4 +30,15 @@ message UserProfile {
     string userId = 1;
     string email = 2;
     string username = 3;
+}
+
+message GetUserAddressRequest {
+    string userId = 1;
+}
+
+message GetUserAddressResponse {
+    string userId = 1;
+    double latitude = 2;
+    double longitude = 3;
+    string addressLine = 4;
 }

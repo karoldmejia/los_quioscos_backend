@@ -2,7 +2,7 @@ import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
 import type { ClientGrpc } from '@nestjs/microservices';
 import { firstValueFrom, Observable } from 'rxjs';
 
-import { UsersServiceClient, KiosksAvailabilityRequest, UserProfile, KioskAvailability,} from '../protos/users';
+import { UsersServiceClient, KiosksAvailabilityRequest, UserProfile, KioskAvailability, GetUserAddressResponse, } from '../protos/users';
 
 @Injectable()
 export class UsersClient implements OnModuleInit {
@@ -11,7 +11,7 @@ export class UsersClient implements OnModuleInit {
     constructor(
         @Inject('USERS_PACKAGE')
         private readonly client: ClientGrpc,
-    ) {}
+    ) { }
 
     onModuleInit() {
         this.usersService = this.client.getService<UsersServiceClient>('UsersService');
@@ -19,17 +19,23 @@ export class UsersClient implements OnModuleInit {
 
     async getKiosksAvailability(kioskIds: string[]): Promise<KioskAvailability[]> {
         const request: KiosksAvailabilityRequest = { kioskIds };
-        
+
         const response = await firstValueFrom(
             this.usersService.getKiosksAvailability(request)
         );
-        
+
         return response.items;
     }
 
     async getUserProfile(userId: string): Promise<UserProfile> {
         return await firstValueFrom(
             this.usersService.getUserProfile({ userId })
+        );
+    }
+
+    async getUserAddress(userId: string): Promise<GetUserAddressResponse> {
+        return await firstValueFrom(
+            this.usersService.getUserAddress({ userId })
         );
     }
 }

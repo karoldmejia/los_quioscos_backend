@@ -1,19 +1,23 @@
 import { InjectRepository } from "@nestjs/typeorm";
-import { CreateAddressDto } from "../dtos/address.dto";
+import { CreateAddressDto, DefaultAddressUpdatedEventDto } from "../dtos/address.dto";
 import { Address } from "../entities/address.entity";
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable, Logger } from "@nestjs/common";
 import { DataSource, DeepPartial, Not, Repository } from "typeorm";
 import { UsersService } from "./users.service";
 import { DomainException } from "@/common/exceptions/domain.exception";
+import { User } from "@/entities/user.entity";
+import { ClientKafka } from "@nestjs/microservices";
 
 @Injectable()
 export class AddressService {
+    private readonly logger = new Logger(AddressService.name);
 
     constructor(
         @InjectRepository(Address)
         private readonly repo: Repository<Address>,
         private readonly usersService: UsersService,
         private readonly dataSource: DataSource,
+        @Inject('KAFKA_SERVICE') private readonly kafkaClient: ClientKafka,
     ) { }
 
     async addAddress(userId: string, dto: CreateAddressDto): Promise<Address> {
@@ -46,7 +50,7 @@ export class AddressService {
         // si no es la primera y viene como isDefault, desactivar el resto
 
         const isDefault = dto.isDefault || addressCount === 0;
-        return this.dataSource.transaction(async (manager) => {
+        const result = await this.dataSource.transaction(async (manager) => {
             if (isDefault) {
                 await manager.update(
                     Address,
@@ -60,7 +64,13 @@ export class AddressService {
 
             return manager.save(address);
         });
+
+        if (isDefault){
+            await this.publishDefaultAddress(user)
+        }
+        return result
     }
+
 
     async updateAddress(userId: string, addressId: string, dto: CreateAddressDto): Promise<Address> {
         // validar existencia del id del usuario
@@ -84,7 +94,9 @@ export class AddressService {
             }
         }
 
-        return this.dataSource.transaction(async (manager) => {
+        const becameDefault = dto.isDefault === true && !existingAddress.isDefault;
+
+        const result = await this.dataSource.transaction(async (manager) => {
             if (dto.isDefault === true && !existingAddress.isDefault) {
                 await manager.update(
                     Address,
@@ -98,6 +110,11 @@ export class AddressService {
 
             return manager.findOneOrFail(Address, { where: { id: addressId } });
         });
+
+        if (becameDefault || (existingAddress.isDefault && (dto.latitude !== undefined || dto.longitude!== undefined))){
+            await this.publishDefaultAddress(user)
+        }
+        return result
     }
 
     async deleteAddress(userId: string, addressId: string): Promise<void> {
@@ -106,7 +123,7 @@ export class AddressService {
             throw new DomainException('User id not found');
         }
 
-        return this.dataSource.transaction(async (manager) => {
+        const wasDefault = await this.dataSource.transaction(async (manager) => {
             const existingAddress = await manager.findOne(Address, {
                 where: { id: addressId, user: { user_id: userId } },
             });
@@ -126,22 +143,31 @@ export class AddressService {
                 if (nextAddress) {
                     await manager.update(Address, nextAddress.id, { isDefault: true });
                 }
+                return true
             }
+            return false
         });
+        if (wasDefault){
+            await this.publishDefaultAddress(user)
+        }
     }
 
-    async getDefaultAddress(userId: string): Promise<Address | null> {
+    async getDefaultAddress(userId: string): Promise<Address> {
         const user = await this.usersService.findUserById(userId);
         if (!user) {
             throw new DomainException('User id not found');
         }
 
-        return this.repo.findOne({
+        const defaultAddress = await this.repo.findOne({
             where: {
                 user: { user_id: userId },
                 isDefault: true,
             },
         });
+        if (!defaultAddress) {
+            throw new DomainException('User does not have a default address registered')
+        }
+        return defaultAddress
     }
 
     // helpers
@@ -162,6 +188,34 @@ export class AddressService {
         if (dto.mapboxId !== undefined) data.mapboxId = dto.mapboxId || undefined;
 
         return data;
+    }
+
+    // kafka events
+
+    async publishDefaultAddress(user: User): Promise<void> {
+
+        const defaultAddress = await this.repo.findOne({
+            where: {
+                user,
+                isDefault: true,
+            }
+        })
+
+        if (!defaultAddress) {
+            this.logger.log(`User ${user.user_id} has no default address after change`)
+            return;
+        }
+
+        const role = user.carrierProfile ? 'CARRIER' : user.kioskProfile ? 'KIOSK' : 'CUSTOMER';
+        const payload: DefaultAddressUpdatedEventDto = {
+            userId: user.user_id,
+            role,
+            latitude: defaultAddress.latitude,
+            longitude: defaultAddress.longitude,
+            changedAt: new Date().toISOString()
+        }
+        this.kafkaClient.emit('default_address_updated', payload)
+        this.logger.log(`Emitted user.default_address_changed for ${user.user_id} (${role})`);
     }
 
 }

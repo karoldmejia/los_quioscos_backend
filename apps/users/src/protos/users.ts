@@ -34,12 +34,25 @@ export interface UserProfile {
   username: string;
 }
 
+export interface GetUserAddressRequest {
+  userId: string;
+}
+
+export interface GetUserAddressResponse {
+  userId: string;
+  latitude: number;
+  longitude: number;
+  addressLine: string;
+}
+
 export const USERS_PACKAGE_NAME = "users";
 
 export interface UsersServiceClient {
   getKiosksAvailability(request: KiosksAvailabilityRequest): Observable<KiosksAvailabilityResponse>;
 
   getUserProfile(request: GetUserProfileRequest): Observable<UserProfile>;
+
+  getUserAddress(request: GetUserAddressRequest): Observable<GetUserAddressResponse>;
 }
 
 export interface UsersServiceController {
@@ -48,11 +61,15 @@ export interface UsersServiceController {
   ): Promise<KiosksAvailabilityResponse> | Observable<KiosksAvailabilityResponse> | KiosksAvailabilityResponse;
 
   getUserProfile(request: GetUserProfileRequest): Promise<UserProfile> | Observable<UserProfile> | UserProfile;
+
+  getUserAddress(
+    request: GetUserAddressRequest,
+  ): Promise<GetUserAddressResponse> | Observable<GetUserAddressResponse> | GetUserAddressResponse;
 }
 
 export function UsersServiceControllerMethods() {
   return function (constructor: Function) {
-    const grpcMethods: string[] = ["getKiosksAvailability", "getUserProfile"];
+    const grpcMethods: string[] = ["getKiosksAvailability", "getUserProfile", "getUserAddress"];
     for (const method of grpcMethods) {
       const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
       GrpcMethod("UsersService", method)(constructor.prototype[method], method, descriptor);

@@ -56,3 +56,11 @@ export class CreateAddressDto {
 export class UpdateAddressDto extends PartialType(
     OmitType(CreateAddressDto, ['country'] as const)
 ) { }
+
+export class DefaultAddressUpdatedEventDto {
+    userId: string
+    role: string
+    latitude: number
+    longitude: number
+    changedAt: string
+}

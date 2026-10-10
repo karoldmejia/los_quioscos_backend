@@ -5,9 +5,23 @@ import { UsersModule } from './modules/users.module';
 import { RedisModule } from './modules/redis.module';
 import { AuthModule } from './modules/auth.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ClientsModule, Transport } from '@nestjs/microservices';
 
 @Module({
   imports: [
+      ClientsModule.register([
+      {
+        name: 'KAFKA_SERVICE',
+        transport: Transport.KAFKA,
+        options: {
+          client: {
+            brokers: (process.env.KAFKA_BROKERS || 'localhost:9092').split(','),
+          },
+          producer: {
+          },
+        },
+      },
+    ]),
     ScheduleModule.forRoot(),
     ConfigModule.forRoot({
       isGlobal: true,

@@ -101,4 +101,12 @@ export interface OrderPaidEventDto {
     deliveryMode: DeliveryMode;
     items: OrderPaidItemDto[];
     logisticsLoad: LogisticsLoadDto;
+    pickupAddress: RouteStopDto,
+    deliveryAddress: RouteStopDto,
+}
+
+export interface RouteStopDto {
+    latitude: number;
+    longitude: number;
+    addressLine: string;
 }

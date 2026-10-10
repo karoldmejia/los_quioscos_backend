@@ -21,14 +21,12 @@ import { ContractsModule } from './modules/contracts.module';
           url: process.env.USERS_GRPC_URL || 'localhost:50051',
         },
       },
-    ]),
-    ClientsModule.register([
       {
         name: 'KAFKA_SERVICE',
         transport: Transport.KAFKA,
         options: {
           client: {
-            brokers: ['localhost:9092']
+            brokers: (process.env.KAFKA_BROKERS || 'localhost:9092').split(','),
           },
           producer: {
           },

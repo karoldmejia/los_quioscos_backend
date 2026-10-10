@@ -1,24 +1,26 @@
-import { CreateCarrierProfileDto, UpdateCarrierProfileDto } from "../dtos/carrierprofile.dto";
+import { CarrierActivatedEventDto, CarrierUpdatedEventDto, CreateCarrierProfileDto, UpdateCarrierProfileDto } from "../dtos/carrierprofile.dto";
 import { CarrierProfile } from "../entities/carrier_profile.entity";
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Logger } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { UsersService } from "./users.service";
 import { RpcException } from "@nestjs/microservices";
-import type { ClientGrpc } from "@nestjs/microservices";
+import type { ClientGrpc, ClientKafka } from "@nestjs/microservices";
 import { KioskProfileService } from "./kioskprofile.service";
-import { CreateVehicleDto, UpdateVehicleDto, UploadVehiclePhotosDto } from "../dtos/vehicle.dto";
+import { CreateVehicleDto, UpdateVehicleDto, UploadVehiclePhotosDto, UpsertVehicleEventDto } from "../dtos/vehicle.dto";
 import { Vehicle } from "../entities/vehicle.entity";
 import { CreateCarrierDocumentDto } from "../dtos/carrierdocument.dto";
 import { DocumentsValidationService } from "./documents-validation.service";
 import { DocumentStatus } from "../enums/document_status.enum";
 import { CarrierDocument } from "../entities/carrier_document.entity";
 import { DocumentType } from "../enums/document_type.enum";
+import { AddressService } from "./address.service";
 
 @Injectable()
 export class CarrierProfileService {
 
     private photosService: any;
+    private readonly logger = new Logger(CarrierProfileService.name);
 
     constructor(
         @InjectRepository(CarrierProfile)
@@ -31,6 +33,8 @@ export class CarrierProfileService {
         private readonly usersService: UsersService,
         private readonly kiosksService: KioskProfileService,
         private readonly documentsValidation: DocumentsValidationService,
+        private readonly addressService: AddressService,
+        @Inject('KAFKA_SERVICE') private readonly kafkaClient: ClientKafka,
         @Inject('PHOTOS_PACKAGE') private client: ClientGrpc,
     ) {
         this.photosService = this.client.getService('PhotosService');
@@ -64,13 +68,43 @@ export class CarrierProfileService {
             throw new RpcException("User does not have a carrier profile associated")
         }
 
-        const updatedData: Partial<CarrierProfile> = {}
-
+        const previous = {
+            serviceRadiusKm: profile.serviceRadiusKm,
+            isAcceptingRoutes: profile.isAcceptingRoutes,
+        }
         if (dto.fullLegalName !== undefined) {
             profile.fullLegalName = dto.fullLegalName
         }
+        if (dto.serviceRadiusKm !== undefined) {
+            profile.serviceRadiusKm = dto.serviceRadiusKm
+        }
+        if (dto.isAcceptingRoutes !== undefined) {
+            profile.isAcceptingRoutes = dto.isAcceptingRoutes
+        }
 
-        return await this.repo.save(profile)
+        await this.repo.save(profile)
+
+        const payload: Partial<CarrierUpdatedEventDto> = {};
+
+        if (dto.serviceRadiusKm !== undefined && dto.serviceRadiusKm !== previous.serviceRadiusKm
+        ) {
+            payload.serviceRadiusKm = dto.serviceRadiusKm;
+        }
+        if (dto.isAcceptingRoutes !== undefined && dto.isAcceptingRoutes !== previous.isAcceptingRoutes
+        ) {
+            payload.isAcceptingRoutes = dto.isAcceptingRoutes;
+        }
+
+        if (Object.keys(payload).length > 0) {
+            const event: CarrierUpdatedEventDto = {
+                userId: profile.userId,
+                ...payload,
+                updatedAt: new Date().toISOString()
+            };
+            this.kafkaClient.emit('carrier.updated', event)
+        }
+
+        return profile
     }
 
     async getProfile(userId: string): Promise<CarrierProfile> {
@@ -88,10 +122,18 @@ export class CarrierProfileService {
         }
         try {
             await this.deleteVehicle(userId)
+            if (profile.canOperate){
+                await this.publishVehicle(profile, 'delete')
+            }
         } catch (error) {
             console.log('No vehicle to delete, continuing with profile deletion');
         }
         await this.repo.softDelete({ userId })
+        this.kafkaClient.emit('carrier.deleted', {
+            userId: profile.userId,
+            deletedAt: new Date().toISOString()
+        }
+        )
     }
 
     async getAllProfiles(): Promise<CarrierProfile[]> {
@@ -126,7 +168,10 @@ export class CarrierProfileService {
             vehiclePhotos: []
         })
 
-        return await this.vehicleRepo.save(vehicle)
+        await this.vehicleRepo.save(vehicle)
+        await this.publishVehicle(profile, 'upsert')
+
+        return vehicle
     }
 
     async updateVehicle(dto: UpdateVehicleDto): Promise<Vehicle> {
@@ -154,7 +199,10 @@ export class CarrierProfileService {
         if (dto.maxWeightKg !== undefined) vehicle.maxWeightKg = dto.maxWeightKg
         if (dto.acceptedPackageTypes !== undefined) vehicle.acceptedPackageTypes = dto.acceptedPackageTypes
 
-        return await this.vehicleRepo.save(vehicle)
+        await this.vehicleRepo.save(vehicle)
+                await this.publishVehicle(profile, 'upsert')
+
+        return vehicle
     }
 
     async getVehicle(vehicleId: string): Promise<Vehicle> {
@@ -166,15 +214,19 @@ export class CarrierProfileService {
     }
 
     async deleteVehicle(carrierProfileId: string): Promise<void> {
-        const vehicle = await this.vehicleRepo.findOneBy({
-            carrierProfile: { userId: carrierProfileId }
+        const profile = await this.repo.findOneBy({userId: carrierProfileId})
+        if (!profile){
+            throw new RpcException('Carrier profile does not exist')
+        }
+        const vehicle = await this.vehicleRepo.findOneBy({carrierProfile: profile
         })
         if (!vehicle) {
             return;
         }
-        await this.vehicleRepo.softDelete({
-            carrierProfile: { userId: carrierProfileId }
-        })
+        await this.vehicleRepo.remove(vehicle)
+        if(profile.canOperate){
+            await this.publishVehicle(profile, 'delete')
+        }
     }
 
     async getAllVehicles(): Promise<Vehicle[]> {
@@ -220,7 +272,7 @@ export class CarrierProfileService {
             status: DocumentStatus.VALID,
         })
         await this.documentRepo.save(document)
-        
+
         await this.verifyOperationalStatus(profile)
         return isValid
     }
@@ -230,6 +282,7 @@ export class CarrierProfileService {
     async verifyOperationalStatus(profile: CarrierProfile): Promise<void> {
 
         const profileId = profile.userId
+        const wasOperational = profile.canOperate
 
         // im going to be using the documents repository to make this query
         const docCounts = await this.documentRepo
@@ -257,6 +310,28 @@ export class CarrierProfileService {
 
         profile.canOperate = hasGroup1 && hasAllGroup2;
         await this.repo.save(profile);
+
+        if (!wasOperational && profile.canOperate) {
+            const address = await this.addressService.getDefaultAddress(profile.userId)
+
+            const payload: CarrierActivatedEventDto = {
+                userId: profile.userId,
+                serviceRadiusKm: profile.serviceRadiusKm || 5,
+                baseLatitude: address.latitude,
+                baseLongitude: address.longitude,
+                isAcceptingRoutes: profile.isAcceptingRoutes,
+                activatedAt: new Date().toISOString()
+
+            }
+            this.kafkaClient.emit('carrier.activated', payload)
+            await this.publishVehicle(profile, 'upsert')
+        } else if (wasOperational && !profile.canOperate) {
+            this.kafkaClient.emit('carrier.deactivated', {
+                userId: profile.userId,
+                deactivatedAt: new Date().toISOString()
+            })
+            await this.publishVehicle(profile, 'upsert')
+        }
     }
 
     // photos
@@ -278,5 +353,36 @@ export class CarrierProfileService {
         await this.vehicleRepo.save(vehicle);
 
         return true;
+    }
+
+    // kafka events
+
+    async publishVehicle(profile: CarrierProfile, action: 'upsert' | 'delete'): Promise<void> {
+        if (!profile.canOperate) {
+            this.logger.log(`Carrier ${profile.userId} cannot operate yet, skipping vehicle event`)
+            return;
+        }
+        const vehicle = await this.vehicleRepo.findOne({ where: { carrierProfile: profile } })
+        if (!vehicle) {
+            this.logger.log(`Carrier ${profile.userId} does not have a vehicle registered, skipping vehicle event`)
+            return;
+        }
+        if (action === 'delete') {
+            this.kafkaClient.emit('vehicle.deleted', {
+                vehicleId: vehicle.vehicleId,
+                carrierId: profile.userId,
+                deletedAt: new Date().toISOString()
+            })
+        }
+        if (action === 'upsert') {
+            const payload: UpsertVehicleEventDto = {
+                vehicleId: vehicle.vehicleId,
+                carrierId: profile.userId,
+                maxWeightKg: vehicle.maxWeightKg,
+                acceptedPackageTypes: vehicle.acceptedPackageTypes,
+                updatedAt: new Date().toISOString()
+            }
+            this.kafkaClient.emit('vehicle.activated', payload)
+        }
     }
 }
