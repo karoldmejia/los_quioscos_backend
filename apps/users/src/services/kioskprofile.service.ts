@@ -110,6 +110,17 @@ export class KioskProfileService {
         });
     }
 
+    async getKioskServiceRadius(userId: string): Promise<number>{
+        const user = await this.repo.findOneBy({userId})
+        if (!user) {
+            throw new RpcException("User ID cannot be found")
+        }
+        if (!user.serviceRadiusKm){
+            throw new RpcException("Kiosk does not have an established coverage radius")
+        }
+        return user.serviceRadiusKm
+    }
+
     // documents
 
     async uploadIdDocument(userId: string, file: Buffer, selfie?: Buffer): Promise<{ profile: KioskProfile; validation: any }> {

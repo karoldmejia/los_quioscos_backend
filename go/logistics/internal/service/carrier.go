@@ -41,9 +41,6 @@ func (s *CarrierService) HandleCarrierActivated(ctx context.Context, event event
 
 	carrier := &model.Carrier{
 		UserID:            userID,
-		ServiceRadiusKm:   event.ServiceRadiusKm,
-		BaseLatitude:      event.BaseLatitude,
-		BaseLongitude:     event.BaseLongitude,
 		IsAcceptingRoutes: event.IsAcceptingRoutes,
 		ActivatedAt:       activatedAt,
 	}
@@ -75,7 +72,6 @@ func (s *CarrierService) HandleCarrierUpdated(ctx context.Context, event events.
 
 	carrier := &model.Carrier{
 		UserID:            userID,
-		ServiceRadiusKm:   event.ServiceRadiusKm,
 		IsAcceptingRoutes: event.IsAcceptingRoutes,
 		UpdatedAt:         &updatedAt,
 	}

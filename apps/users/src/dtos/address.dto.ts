@@ -63,4 +63,5 @@ export class DefaultAddressUpdatedEventDto {
     latitude: number
     longitude: number
     changedAt: string
+    serviceRadiusKm?: number
 }

@@ -24,9 +24,6 @@ func TestVehicleService_UpsertCreatesVehicle(t *testing.T) {
 	carrierID := uuid.New()
 	if err := carrierSvc.HandleCarrierActivated(context.Background(), events.CarrierActivatedEvent{
 		UserID:            carrierID.String(),
-		ServiceRadiusKm:   decimal.NewFromFloat(15.0),
-		BaseLatitude:      decimal.NewFromFloat(4.711),
-		BaseLongitude:     decimal.NewFromFloat(-74.0721),
 		IsAcceptingRoutes: true,
 		ActivatedAt:       "2026-10-09T12:00:00Z",
 	}); err != nil {
@@ -71,9 +68,6 @@ func TestVehicleService_UpsertUpdatesExisting(t *testing.T) {
 	carrierID := uuid.New()
 	if err := carrierSvc.HandleCarrierActivated(context.Background(), events.CarrierActivatedEvent{
 		UserID:            carrierID.String(),
-		ServiceRadiusKm:   decimal.NewFromFloat(15.0),
-		BaseLatitude:      decimal.NewFromFloat(4.711),
-		BaseLongitude:     decimal.NewFromFloat(-74.0721),
 		IsAcceptingRoutes: true,
 		ActivatedAt:       "2026-10-09T12:00:00Z",
 	}); err != nil {
@@ -132,9 +126,6 @@ func TestVehicleService_DeletedRemovesVehicle(t *testing.T) {
 	carrierID := uuid.New()
 	if err := carrierSvc.HandleCarrierActivated(context.Background(), events.CarrierActivatedEvent{
 		UserID:            carrierID.String(),
-		ServiceRadiusKm:   decimal.NewFromFloat(15.0),
-		BaseLatitude:      decimal.NewFromFloat(4.711),
-		BaseLongitude:     decimal.NewFromFloat(-74.0721),
 		IsAcceptingRoutes: true,
 		ActivatedAt:       "2026-10-09T12:00:00Z",
 	}); err != nil {

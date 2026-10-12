@@ -85,11 +85,6 @@ export class CarrierProfileService {
         await this.repo.save(profile)
 
         const payload: Partial<CarrierUpdatedEventDto> = {};
-
-        if (dto.serviceRadiusKm !== undefined && dto.serviceRadiusKm !== previous.serviceRadiusKm
-        ) {
-            payload.serviceRadiusKm = dto.serviceRadiusKm;
-        }
         if (dto.isAcceptingRoutes !== undefined && dto.isAcceptingRoutes !== previous.isAcceptingRoutes
         ) {
             payload.isAcceptingRoutes = dto.isAcceptingRoutes;
@@ -316,9 +311,6 @@ export class CarrierProfileService {
 
             const payload: CarrierActivatedEventDto = {
                 userId: profile.userId,
-                serviceRadiusKm: profile.serviceRadiusKm || 5,
-                baseLatitude: address.latitude,
-                baseLongitude: address.longitude,
                 isAcceptingRoutes: profile.isAcceptingRoutes,
                 activatedAt: new Date().toISOString()
 

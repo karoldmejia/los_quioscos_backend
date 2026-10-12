@@ -9,15 +9,12 @@ import (
 )
 
 type Carrier struct {
-	UserID            uuid.UUID       `gorm:"type:uuid;primaryKey"`
-	ServiceRadiusKm   decimal.Decimal `gorm:"type:decimal(10,2)"`
-	BaseLatitude      decimal.Decimal `gorm:"type:decimal(10,7)"`
-	BaseLongitude     decimal.Decimal `gorm:"type:decimal(10,7)"`
-	IsAcceptingRoutes bool            `gorm:"default:true"`
-	Vehicle           *Vehicle        `gorm:"foreignKey:CarrierID"`
-	ActivatedAt       time.Time       `gorm:"type:timestamptz"`
-	UpdatedAt         *time.Time      `gorm:"type:timestamptz"`
-	DeletedAt         gorm.DeletedAt  `gorm:"index"`
+	UserID            uuid.UUID      `gorm:"type:uuid;primaryKey"`
+	IsAcceptingRoutes bool           `gorm:"default:true"`
+	Vehicle           *Vehicle       `gorm:"foreignKey:CarrierID"`
+	ActivatedAt       time.Time      `gorm:"type:timestamptz"`
+	UpdatedAt         *time.Time     `gorm:"type:timestamptz"`
+	DeletedAt         gorm.DeletedAt `gorm:"index"`
 }
 
 type Vehicle struct {

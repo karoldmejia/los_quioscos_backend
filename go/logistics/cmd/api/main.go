@@ -39,6 +39,7 @@ func main() {
 		&model.Package{},
 		&model.Carrier{},
 		&model.Vehicle{},
+		&model.Address{},
 	); err != nil {
 		log.Fatalf("failed to migrate database: %v", err)
 	}
@@ -48,11 +49,13 @@ func main() {
 	deliveryRepo := repository.NewDeliveryOrderRepository(db)
 	carrierRepo := repository.NewCarrierRepository(db)
 	vehicleRepo := repository.NewVehicleRepository(db)
+	addressRepo := repository.NewAddressRepository(db)
 
 	// services
 	deliverySvc := service.NewDeliveryService(deliveryRepo)
 	carrierSvc := service.NewCarrierService(carrierRepo)
 	vehicleSvc := service.NewVehicleService(vehicleRepo)
+	addressSvc := service.NewAddressService(addressRepo)
 
 	// consumers
 	orderPaidConsumer := consumer.NewConsumer[events.OrderPaidEvent](cfg.Kafka.Brokers, "order.paid", "logistics-order-paid")
@@ -61,6 +64,7 @@ func main() {
 	carrierDeletedConsumer := consumer.NewConsumer[events.CarrierDeletedEvent](cfg.Kafka.Brokers, "carrier.deleted", "logistics-carrier-projection")
 	vehicleUpsertConsumer := consumer.NewConsumer[events.VehicleUpsertEvent](cfg.Kafka.Brokers, "vehicle.upsert", "logistics-carrier-projection")
 	vehicleDeletedConsumer := consumer.NewConsumer[events.VehicleDeletedEvent](cfg.Kafka.Brokers, "vehicle.deleted", "logistics-carrier-projection")
+	addressDefaultUpdatedConsumer := consumer.NewConsumer[events.AddressUpdated](cfg.Kafka.Brokers, "default_address.updated", "logistics-address-projection")
 
 	// context and closing
 	ctx, cancel := context.WithCancel(context.Background())
@@ -98,6 +102,10 @@ func main() {
 		{
 			name:  "vehicle.deleted",
 			start: func() { vehicleDeletedConsumer.Start(ctx, vehicleSvc.HandleVehicleDeleted) },
+		},
+		{
+			name:  "default_address.updated",
+			start: func() { addressDefaultUpdatedConsumer.Start(ctx, addressSvc.HandleAddressUpdated) },
 		},
 	}
 

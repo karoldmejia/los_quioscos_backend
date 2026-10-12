@@ -6,6 +6,7 @@ service UsersService {
     rpc GetKiosksAvailability (KiosksAvailabilityRequest) returns (KiosksAvailabilityResponse);
     rpc GetUserProfile (GetUserProfileRequest) returns (UserProfile);
     rpc GetUserAddress (GetUserAddressRequest) returns (GetUserAddressResponse);
+    rpc GetKioskServiceRadius (GetKioskServiceRadiusRequest) returns (GetKioskServiceRadiusResponse);
 }
 
 message KiosksAvailabilityRequest {
@@ -41,4 +42,11 @@ message GetUserAddressResponse {
     double latitude = 2;
     double longitude = 3;
     string addressLine = 4;
+}
+
+message GetKioskServiceRadiusRequest {
+    string userId = 1;
+}
+message GetKioskServiceRadiusResponse {
+    double serviceRadiusKm = 1;
 }

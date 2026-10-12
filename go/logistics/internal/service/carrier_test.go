@@ -8,7 +8,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/events"
 	"github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/model"
-	"github.com/shopspring/decimal"
 )
 
 type mockCarrierRepository struct {
@@ -51,9 +50,6 @@ func (m *mockCarrierRepository) Delete(ctx context.Context, c *model.Carrier) er
 func TestHandleCarrierActivated(t *testing.T) {
 	validEvent := events.CarrierActivatedEvent{
 		UserID:            "550e8400-e29b-41d4-a716-446655440000",
-		ServiceRadiusKm:   decimal.NewFromFloat(15.0),
-		BaseLatitude:      decimal.NewFromFloat(-74.0721),
-		BaseLongitude:     decimal.NewFromFloat(4.7110),
 		IsAcceptingRoutes: true,
 		ActivatedAt:       "2026-10-09T12:00:00Z",
 	}
@@ -71,9 +67,6 @@ func TestHandleCarrierActivated(t *testing.T) {
 		}
 		if mock.createdCarrier.UserID.String() != validEvent.UserID {
 			t.Errorf("userID = %s, want %s", mock.createdCarrier.UserID, validEvent.UserID)
-		}
-		if mock.createdCarrier.ServiceRadiusKm != validEvent.ServiceRadiusKm {
-			t.Errorf("serviceRadius = %v, want %v", mock.createdCarrier.ServiceRadiusKm, validEvent.ServiceRadiusKm)
 		}
 	})
 
@@ -137,7 +130,6 @@ func TestHandleCarrierActivated(t *testing.T) {
 func TestHandleCarrierUpdated(t *testing.T) {
 	validEvent := events.CarrierUpdatedEvent{
 		UserID:            "550e8400-e29b-41d4-a716-446655440000",
-		ServiceRadiusKm:   decimal.NewFromFloat(20.0),
 		IsAcceptingRoutes: false,
 		UpdatedAt:         "2026-10-09T13:00:00Z",
 	}

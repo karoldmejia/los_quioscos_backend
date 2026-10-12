@@ -39,16 +39,12 @@ export class UpdateCarrierProfileDto {
 
 export class CarrierActivatedEventDto {
     userId: string;
-    serviceRadiusKm: number;
-    baseLatitude: number;
-    baseLongitude: number;
     isAcceptingRoutes: boolean;
     activatedAt: string;
 }
 
 export class CarrierUpdatedEventDto {
     userId: string;
-    serviceRadiusKm?: number;
     isAcceptingRoutes?: boolean;
     updatedAt: string;
 }

@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/shopspring/decimal"
 
 	"github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/events"
 	"github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/model"
@@ -24,9 +23,6 @@ func TestCarrierService_ActivatedCreatesCarrier(t *testing.T) {
 	userID := uuid.New()
 	event := events.CarrierActivatedEvent{
 		UserID:            userID.String(),
-		ServiceRadiusKm:   decimal.NewFromFloat(15.0),
-		BaseLatitude:      decimal.NewFromFloat(4.711),
-		BaseLongitude:     decimal.NewFromFloat(-74.0721),
 		IsAcceptingRoutes: true,
 		ActivatedAt:       "2026-10-09T12:00:00Z",
 	}
@@ -38,10 +34,6 @@ func TestCarrierService_ActivatedCreatesCarrier(t *testing.T) {
 	var carrier model.Carrier
 	if err := testDB.Where("user_id = ?", userID).First(&carrier).Error; err != nil {
 		t.Fatalf("carrier not found in DB: %v", err)
-	}
-	expected := decimal.NewFromFloat(15.0)
-	if !carrier.ServiceRadiusKm.Equal(expected) {
-		t.Errorf("service radius = %v, want 15.0", carrier.ServiceRadiusKm)
 	}
 	if !carrier.IsAcceptingRoutes {
 		t.Error("expected IsAcceptingRoutes = true")
@@ -57,9 +49,6 @@ func TestCarrierService_ActivatedIsIdempotent(t *testing.T) {
 	userID := uuid.New()
 	event := events.CarrierActivatedEvent{
 		UserID:            userID.String(),
-		ServiceRadiusKm:   decimal.NewFromFloat(15.0),
-		BaseLatitude:      decimal.NewFromFloat(4.711),
-		BaseLongitude:     decimal.NewFromFloat(-74.0721),
 		IsAcceptingRoutes: true,
 		ActivatedAt:       "2026-10-09T12:00:00Z",
 	}
@@ -92,9 +81,6 @@ func TestCarrierService_UpdatedModifiesCarrier(t *testing.T) {
 	// Crear primero
 	if err := svc.HandleCarrierActivated(context.Background(), events.CarrierActivatedEvent{
 		UserID:            userID.String(),
-		ServiceRadiusKm:   decimal.NewFromFloat(15.0),
-		BaseLatitude:      decimal.NewFromFloat(4.711),
-		BaseLongitude:     decimal.NewFromFloat(-74.0721),
 		IsAcceptingRoutes: true,
 		ActivatedAt:       "2026-10-09T12:00:00Z",
 	}); err != nil {
@@ -104,7 +90,6 @@ func TestCarrierService_UpdatedModifiesCarrier(t *testing.T) {
 	// Actualizar
 	if err := svc.HandleCarrierUpdated(context.Background(), events.CarrierUpdatedEvent{
 		UserID:            userID.String(),
-		ServiceRadiusKm:   decimal.NewFromFloat(25.0),
 		IsAcceptingRoutes: false,
 		UpdatedAt:         "2026-10-09T13:00:00Z",
 	}); err != nil {
@@ -113,10 +98,6 @@ func TestCarrierService_UpdatedModifiesCarrier(t *testing.T) {
 
 	var carrier model.Carrier
 	testDB.Where("user_id = ?", userID).First(&carrier)
-	expected := decimal.NewFromFloat(25.0)
-	if !carrier.ServiceRadiusKm.Equal(expected) {
-		t.Errorf("service radius = %v, want 25.0", carrier.ServiceRadiusKm)
-	}
 	if carrier.IsAcceptingRoutes {
 		t.Error("expected IsAcceptingRoutes = false")
 	}

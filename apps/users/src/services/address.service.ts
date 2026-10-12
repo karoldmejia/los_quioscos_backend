@@ -207,14 +207,21 @@ export class AddressService {
         }
 
         const role = user.carrierProfile ? 'CARRIER' : user.kioskProfile ? 'KIOSK' : 'CUSTOMER';
+        let serviceRadiusKm
+        if (role == 'CARRIER'){
+            serviceRadiusKm = user.carrierProfile?.serviceRadiusKm
+        } else if (role == 'KIOSK'){
+            serviceRadiusKm = user.kioskProfile?.serviceRadiusKm
+        }
         const payload: DefaultAddressUpdatedEventDto = {
             userId: user.user_id,
             role,
             latitude: defaultAddress.latitude,
             longitude: defaultAddress.longitude,
-            changedAt: new Date().toISOString()
+            changedAt: new Date().toISOString(),
+            serviceRadiusKm: serviceRadiusKm,
         }
-        this.kafkaClient.emit('default_address_updated', payload)
+        this.kafkaClient.emit('default_address.updated', payload)
         this.logger.log(`Emitted user.default_address_changed for ${user.user_id} (${role})`);
     }
 

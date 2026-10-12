@@ -31,7 +31,6 @@ func (r *carrierRepository) Update(ctx context.Context, carrier *model.Carrier) 
 	return r.db.WithContext(ctx).Model(&model.Carrier{}).
 		Where("user_id=?", carrier.UserID).
 		Updates(map[string]interface{}{
-			"service_radius_km":   carrier.ServiceRadiusKm,
 			"is_accepting_routes": carrier.IsAcceptingRoutes,
 			"updated_at":          carrier.UpdatedAt,
 		}).Error
