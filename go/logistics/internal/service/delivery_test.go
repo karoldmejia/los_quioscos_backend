@@ -6,10 +6,10 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 
 	"github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/events"
 	"github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/model"
-	"github.com/shopspring/decimal"
 )
 
 type mockDeliveryOrderRepository struct {
@@ -36,6 +36,35 @@ func (m *mockDeliveryOrderRepository) CreateWithLoadAndPackages(
 	m.createdPackages = packages
 	return m.createErr
 }
+
+type mockAddressService struct {
+	address *model.Address
+	err     error
+}
+
+func (m *mockAddressService) GetUserAddress(ctx context.Context, userID string) (*model.Address, error) {
+	return m.address, m.err
+}
+
+type mockRouteStopService struct {
+	routeStop *model.RouteStop
+	err       error
+	callCount int
+}
+
+func (m *mockRouteStopService) CreateRouteStop(
+	ctx context.Context,
+	latitude, longitude decimal.Decimal,
+	stopType model.StopType,
+) (*model.RouteStop, error) {
+	m.callCount++
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.routeStop, nil
+}
+
+// --- Tests ---
 
 func TestMapPackagesFromEvent(t *testing.T) {
 	tests := []struct {
@@ -115,9 +144,26 @@ func TestHandleOrderPaid(t *testing.T) {
 		},
 	}
 
+	validAddress := &model.Address{
+		ID:        uuid.New(),
+		UserID:    uuid.New(),
+		Latitude:  decimal.NewFromFloat(4.711),
+		Longitude: decimal.NewFromFloat(-74.0721),
+	}
+
+	validRouteStop := &model.RouteStop{
+		ID:        uuid.New(),
+		StopType:  model.StopTypePickup,
+		Latitude:  decimal.NewFromFloat(4.711),
+		Longitude: decimal.NewFromFloat(-74.0721),
+	}
+
 	t.Run("creates order successfully", func(t *testing.T) {
 		mockRepo := &mockDeliveryOrderRepository{}
-		svc := NewDeliveryService(mockRepo)
+		mockAddr := &mockAddressService{address: validAddress}
+		mockStop := &mockRouteStopService{routeStop: validRouteStop}
+
+		svc := NewDeliveryService(mockRepo, mockAddr, mockStop)
 
 		err := svc.HandleOrderPaid(context.Background(), validEvent)
 		if err != nil {
@@ -129,13 +175,19 @@ func TestHandleOrderPaid(t *testing.T) {
 		if mockRepo.createdLoad.TotalWeightKg.String() != "5" {
 			t.Errorf("totalWeight = %s, want 5", mockRepo.createdLoad.TotalWeightKg)
 		}
+		if mockStop.callCount != 2 {
+			t.Errorf("CreateRouteStop called %d times, want 2", mockStop.callCount)
+		}
 	})
 
 	t.Run("skips if order already exists", func(t *testing.T) {
 		mockRepo := &mockDeliveryOrderRepository{
 			existingOrder: &model.DeliveryOrder{ID: uuid.New()},
 		}
-		svc := NewDeliveryService(mockRepo)
+		mockAddr := &mockAddressService{address: validAddress}
+		mockStop := &mockRouteStopService{routeStop: validRouteStop}
+
+		svc := NewDeliveryService(mockRepo, mockAddr, mockStop)
 
 		err := svc.HandleOrderPaid(context.Background(), validEvent)
 		if err != nil {
@@ -144,6 +196,9 @@ func TestHandleOrderPaid(t *testing.T) {
 		if mockRepo.createdOrder != nil {
 			t.Error("expected no order to be created")
 		}
+		if mockStop.callCount != 0 {
+			t.Errorf("CreateRouteStop called %d times, want 0", mockStop.callCount)
+		}
 	})
 
 	t.Run("fails on invalid orderId", func(t *testing.T) {
@@ -151,11 +206,49 @@ func TestHandleOrderPaid(t *testing.T) {
 		badEvent.OrderID = "not-a-uuid"
 
 		mockRepo := &mockDeliveryOrderRepository{}
-		svc := NewDeliveryService(mockRepo)
+		mockAddr := &mockAddressService{address: validAddress}
+		mockStop := &mockRouteStopService{routeStop: validRouteStop}
+
+		svc := NewDeliveryService(mockRepo, mockAddr, mockStop)
 
 		err := svc.HandleOrderPaid(context.Background(), badEvent)
 		if err == nil {
 			t.Fatal("expected error, got nil")
+		}
+		if mockRepo.createdOrder != nil {
+			t.Error("expected no order to be created")
+		}
+	})
+
+	t.Run("fails when address service fails", func(t *testing.T) {
+		mockRepo := &mockDeliveryOrderRepository{}
+		mockAddr := &mockAddressService{err: errors.New("address not found")}
+		mockStop := &mockRouteStopService{routeStop: validRouteStop}
+
+		svc := NewDeliveryService(mockRepo, mockAddr, mockStop)
+
+		err := svc.HandleOrderPaid(context.Background(), validEvent)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if mockRepo.createdOrder != nil {
+			t.Error("expected no order to be created")
+		}
+	})
+
+	t.Run("fails when route stop service fails", func(t *testing.T) {
+		mockRepo := &mockDeliveryOrderRepository{}
+		mockAddr := &mockAddressService{address: validAddress}
+		mockStop := &mockRouteStopService{err: errors.New("stop creation failed")}
+
+		svc := NewDeliveryService(mockRepo, mockAddr, mockStop)
+
+		err := svc.HandleOrderPaid(context.Background(), validEvent)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if mockRepo.createdOrder != nil {
+			t.Error("expected no order to be created")
 		}
 	})
 
@@ -163,7 +256,10 @@ func TestHandleOrderPaid(t *testing.T) {
 		mockRepo := &mockDeliveryOrderRepository{
 			createErr: errors.New("db down"),
 		}
-		svc := NewDeliveryService(mockRepo)
+		mockAddr := &mockAddressService{address: validAddress}
+		mockStop := &mockRouteStopService{routeStop: validRouteStop}
+
+		svc := NewDeliveryService(mockRepo, mockAddr, mockStop)
 
 		err := svc.HandleOrderPaid(context.Background(), validEvent)
 		if err == nil {

@@ -8,7 +8,7 @@ import (
 )
 
 type Address struct {
-	ID              uuid.UUID        `gorm:"type:uuid;primaryKey"`
+	ID              uuid.UUID        `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
 	UserID          uuid.UUID        `gorm:"type:uuid;not null;uniqueIndex"`
 	Role            string           `gorm:"type:varchar(200)"`
 	Latitude        decimal.Decimal  `gorm:"type:decimal(10,7);not null"`

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 
 	"github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/events"
 	"github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/model"
@@ -15,16 +16,45 @@ import (
 )
 
 func TestHandleOrderPaid_EndToEnd(t *testing.T) {
-	testDB.Exec("TRUNCATE delivery_orders, logistics_loads, packages CASCADE")
+	testDB.Exec("TRUNCATE packages, logistics_loads, delivery_orders, route_stops, addresses CASCADE")
 
-	repo := repository.NewDeliveryOrderRepository(testDB)
-	svc := service.NewDeliveryService(repo)
+	addressRepo := repository.NewAddressRepository(testDB)
+	routeStopRepo := repository.NewRouteStopRepository(testDB)
+	deliveryRepo := repository.NewDeliveryOrderRepository(testDB)
 
+	addressSvc := service.NewAddressService(addressRepo)
+	routeStopSvc := service.NewRouteStopService(routeStopRepo)
+	deliverySvc := service.NewDeliveryService(deliveryRepo, addressSvc, routeStopSvc)
+
+	kioskID := uuid.New()
+	clientID := uuid.New()
+
+	if err := addressSvc.HandleAddressUpdated(context.Background(), events.AddressUpdated{
+		UserID:    kioskID.String(),
+		Role:      "KIOSK",
+		Latitude:  decimal.NewFromFloat(4.711),
+		Longitude: decimal.NewFromFloat(-74.0721),
+		ChangedAt: "2026-10-12T12:00:00Z",
+	}); err != nil {
+		t.Fatalf("setup kiosk address failed: %v", err)
+	}
+
+	if err := addressSvc.HandleAddressUpdated(context.Background(), events.AddressUpdated{
+		UserID:    clientID.String(),
+		Role:      "CUSTOMER",
+		Latitude:  decimal.NewFromFloat(4.721),
+		Longitude: decimal.NewFromFloat(-74.0821),
+		ChangedAt: "2026-10-12T12:00:00Z",
+	}); err != nil {
+		t.Fatalf("setup client address failed: %v", err)
+	}
+
+	// GIVEN: un evento order.paid
 	orderID := uuid.New()
 	event := events.OrderPaidEvent{
 		OrderID:      orderID.String(),
-		UserID:       uuid.New().String(),
-		KioskID:      uuid.New().String(),
+		UserID:       clientID.String(),
+		KioskID:      kioskID.String(),
 		DeliveryMode: "INDIVIDUAL",
 		LogisticsLoad: events.LogisticsLoadEvent{
 			Packages: []events.PackageEvent{
@@ -34,20 +64,57 @@ func TestHandleOrderPaid_EndToEnd(t *testing.T) {
 		},
 	}
 
-	err := svc.HandleOrderPaid(context.Background(), event)
-	if err != nil {
+	// WHEN: se procesa el evento
+	if err := deliverySvc.HandleOrderPaid(context.Background(), event); err != nil {
 		t.Fatalf("HandleOrderPaid failed: %v", err)
 	}
 
+	// THEN: el pedido se creó
 	var order model.DeliveryOrder
-	err = testDB.Where("order_id = ?", event.OrderID).First(&order).Error
-	if err != nil {
+	if err := testDB.Where("order_id = ?", event.OrderID).First(&order).Error; err != nil {
 		t.Fatalf("order not found in DB: %v", err)
 	}
 
+	if order.PickupRouteStopID == uuid.Nil {
+		t.Error("expected PickupRouteStopID to be set")
+	}
+	if order.DeliveryRouteStopID == uuid.Nil {
+		t.Error("expected DeliveryRouteStopID to be set")
+	}
+	if order.PickupRouteStopID == order.DeliveryRouteStopID {
+		t.Error("expected pickup and delivery stops to be different")
+	}
+
+	var pickupStop model.RouteStop
+	if err := testDB.Where("id = ?", order.PickupRouteStopID).First(&pickupStop).Error; err != nil {
+		t.Fatalf("pickup stop not found: %v", err)
+	}
+	if pickupStop.StopType != model.StopTypePickup {
+		t.Errorf("pickup stop type = %s, want PICKUP", pickupStop.StopType)
+	}
+	if !pickupStop.Latitude.Equal(decimal.NewFromFloat(4.711)) {
+		t.Errorf("pickup latitude = %s, want 4.711", pickupStop.Latitude)
+	}
+	if !pickupStop.Longitude.Equal(decimal.NewFromFloat(-74.0721)) {
+		t.Errorf("pickup longitude = %s, want -74.0721", pickupStop.Longitude)
+	}
+
+	var deliveryStop model.RouteStop
+	if err := testDB.Where("id = ?", order.DeliveryRouteStopID).First(&deliveryStop).Error; err != nil {
+		t.Fatalf("delivery stop not found: %v", err)
+	}
+	if deliveryStop.StopType != model.StopTypeDelivery {
+		t.Errorf("delivery stop type = %s, want DELIVERY", deliveryStop.StopType)
+	}
+	if !deliveryStop.Latitude.Equal(decimal.NewFromFloat(4.721)) {
+		t.Errorf("delivery latitude = %s, want 4.721", deliveryStop.Latitude)
+	}
+	if !deliveryStop.Longitude.Equal(decimal.NewFromFloat(-74.0821)) {
+		t.Errorf("delivery longitude = %s, want -74.0821", deliveryStop.Longitude)
+	}
+
 	var load model.LogisticsLoad
-	err = testDB.Where("delivery_order_id = ?", order.ID).First(&load).Error
-	if err != nil {
+	if err := testDB.Where("delivery_order_id = ?", order.ID).First(&load).Error; err != nil {
 		t.Fatalf("load not found: %v", err)
 	}
 	if load.TotalWeightKg.String() != "8" {

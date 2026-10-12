@@ -12,12 +12,29 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-type DeliveryService struct {
-	repo repository.DeliveryOrderRepository
+type AddressProvider interface {
+	GetUserAddress(ctx context.Context, userID string) (*model.Address, error)
 }
 
-func NewDeliveryService(repo repository.DeliveryOrderRepository) *DeliveryService {
-	return &DeliveryService{repo: repo}
+type RouteStopProvider interface {
+	CreateRouteStop(
+		ctx context.Context,
+		latitude decimal.Decimal, longitude decimal.Decimal,
+		stopType model.StopType) (*model.RouteStop, error)
+}
+type DeliveryService struct {
+	repo             repository.DeliveryOrderRepository
+	addressService   AddressProvider
+	routeStopService RouteStopProvider
+}
+
+func NewDeliveryService(repo repository.DeliveryOrderRepository, addressService AddressProvider, routeStopService RouteStopProvider) *DeliveryService {
+	return &DeliveryService{
+		repo:             repo,
+		addressService:   addressService,
+		routeStopService: routeStopService,
+	}
+
 }
 
 func (s *DeliveryService) HandleOrderPaid(ctx context.Context, event events.OrderPaidEvent) error {
@@ -34,10 +51,6 @@ func (s *DeliveryService) HandleOrderPaid(ctx context.Context, event events.Orde
 		return nil
 	}
 
-	orderID, err := uuid.Parse(event.OrderID)
-	if err != nil {
-		return err
-	}
 	userID, err := uuid.Parse(event.UserID)
 	if err != nil {
 		return err
@@ -47,14 +60,27 @@ func (s *DeliveryService) HandleOrderPaid(ctx context.Context, event events.Orde
 		return err
 	}
 
+	orderID, err := uuid.Parse(event.OrderID)
+	if err != nil {
+		return err
+	}
+
 	modelPackages, totalWeight, hasFragile := s.mapPackagesFromEvent(event.LogisticsLoad.Packages)
+	pickupStop, deliveryStop, err := s.createRouteStopsFromAddresses(ctx, event.KioskID, event.UserID)
+	if err != nil {
+		return err
+	}
 
 	order := &model.DeliveryOrder{
-		OrderID:      orderID,
-		UserID:       userID,
-		KioskID:      kioskID,
-		DeliveryMode: model.DeliveryMode(event.DeliveryMode),
-		Status:       model.StatusPending,
+		OrderID:             orderID,
+		UserID:              userID,
+		KioskID:             kioskID,
+		DeliveryMode:        model.DeliveryMode(event.DeliveryMode),
+		Status:              model.StatusPending,
+		PickupRouteStopID:   pickupStop.ID,
+		DeliveryRouteStopID: deliveryStop.ID,
+		PickupRouteStop:     pickupStop,
+		DeliveryRouteStop:   deliveryStop,
 	}
 	load := &model.LogisticsLoad{
 		TotalWeightKg: totalWeight,
@@ -84,4 +110,28 @@ func (s *DeliveryService) mapPackagesFromEvent(packages []events.PackageEvent) (
 	}
 
 	return modelPackages, totalWeight, hasFragile
+}
+
+func (s *DeliveryService) createRouteStopsFromAddresses(ctx context.Context, pickupID, deliveryID string) (*model.RouteStop, *model.RouteStop, error) {
+	pickupAddress, err := s.addressService.GetUserAddress(ctx, pickupID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get pickup address: %w", err)
+	}
+
+	deliveryAddress, err := s.addressService.GetUserAddress(ctx, deliveryID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get delivery address: %w", err)
+	}
+
+	pickupRouteStop, err := s.routeStopService.CreateRouteStop(ctx, pickupAddress.Latitude, pickupAddress.Longitude, model.StopTypePickup)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get create pickup route stop: %w", err)
+	}
+	deliveryRouteStop, err := s.routeStopService.CreateRouteStop(ctx, deliveryAddress.Latitude, deliveryAddress.Longitude, model.StopTypeDelivery)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get create pickup route stop: %w", err)
+	}
+
+	return pickupRouteStop, deliveryRouteStop, nil
+
 }

@@ -8,7 +8,7 @@ import { OrderItem } from '../entities/order-item.entity';
 
 import { BatchReservationService } from './reservation.service';
 import { DataSource } from 'typeorm';
-import { LogisticsLoadDto, OrderPaidEventDto, OrderPaidItemDto, PackageDto, RouteStopDto } from 'src/dtos/order-generation.dto';
+import { LogisticsLoadDto, OrderPaidEventDto, OrderPaidItemDto, } from 'src/dtos/order-generation.dto';
 import { OrderStatus } from 'src/enums/order.enum';
 import { UsersClient } from 'src/clients/users.client';
 
@@ -240,24 +240,6 @@ export class OrderService {
       );
     }
 
-    const addressPickup = await this.usersClient.getUserAddress(order.kioskUserId)
-    const addressDelivery = await this.usersClient.getUserAddress(order.userId)
-
-    if (!addressDelivery || !addressPickup){
-      throw new RpcException('Kiosk or client does not have a fixed address')
-    }
-
-    const pickupAddress: RouteStopDto = {
-      latitude: addressPickup.latitude,
-      longitude: addressPickup.longitude,
-      addressLine: addressPickup.addressLine,
-    }
-    const deliveryAddress: RouteStopDto = {
-      latitude: addressDelivery.latitude,
-      longitude: addressDelivery.longitude,
-      addressLine: addressDelivery.addressLine,
-    }
-
     return {
       orderId: order.id,
       userId: order.userId,
@@ -265,8 +247,6 @@ export class OrderService {
       deliveryMode: order.deliveryMode,
       items,
       logisticsLoad: order.logisticsLoad,
-      pickupAddress: pickupAddress,
-      deliveryAddress: deliveryAddress,
     }
   }
 

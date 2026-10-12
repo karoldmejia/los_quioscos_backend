@@ -13,6 +13,7 @@ type AddressRepository interface {
 	Upsert(ctx context.Context, carrier *model.Address) error
 	Delete(ctx context.Context, carrier *model.Address) error
 	Get(ctx context.Context, carrierID string) (*model.Address, error)
+	CheckCoverage(ctx context.Context, kioskUserID, clientUserID string) (bool, error)
 }
 
 type addressRepository struct {
@@ -41,9 +42,9 @@ func (r *addressRepository) Delete(ctx context.Context, address *model.Address) 
 	return r.db.WithContext(ctx).Delete(address).Error
 }
 
-func (r *addressRepository) Get(ctx context.Context, addressID string) (*model.Address, error) {
+func (r *addressRepository) Get(ctx context.Context, userID string) (*model.Address, error) {
 	var address model.Address
-	err := r.db.WithContext(ctx).Where("address_id=?", addressID).First(&address).Error
+	err := r.db.WithContext(ctx).Where("user_id=?", userID).First(&address).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
 	}
@@ -51,4 +52,23 @@ func (r *addressRepository) Get(ctx context.Context, addressID string) (*model.A
 		return nil, err
 	}
 	return &address, nil
+}
+
+func (r *addressRepository) CheckCoverage(ctx context.Context, kioskUserID, clientUserID string) (bool, error) {
+	var covered bool
+	err := r.db.WithContext(ctx).Raw(`
+			SELECT ST_DWithin(
+				kiosk.location,
+				client.location,
+				kiosk.service_radius_km * 1000
+			)
+			FROM addresses kiosk
+			JOIN addresses client ON client.user_id = ?
+			WHERE kiosk.user_id = ?
+		`, clientUserID, kioskUserID).Scan(&covered).Error
+
+	if err != nil {
+		return false, err
+	}
+	return covered, nil
 }

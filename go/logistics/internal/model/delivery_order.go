@@ -35,6 +35,12 @@ type DeliveryOrder struct {
 	UserID  uuid.UUID `gorm:"type:uuid;not null"`
 	KioskID uuid.UUID `gorm:"type:uuid;not null"`
 
+	PickupRouteStopID   uuid.UUID `gorm:"type:uuid;not null"`
+	DeliveryRouteStopID uuid.UUID `gorm:"type:uuid;not null"`
+
+	PickupRouteStop   *RouteStop `gorm:"foreignKey:PickupRouteStopID;references:ID"`
+	DeliveryRouteStop *RouteStop `gorm:"foreignKey:DeliveryRouteStopID;references:ID"`
+
 	LogisticsLoad *LogisticsLoad `gorm:"foreignKey:DeliveryOrderID;references:ID"`
 
 	DeliveryMode DeliveryMode   `gorm:"type:varchar(50);not null"`
@@ -45,8 +51,6 @@ type DeliveryOrder struct {
 	ShippingCost     *decimal.Decimal `gorm:"type:decimal(10,2)"`
 	BaseShippingCost *decimal.Decimal `gorm:"type:decimal(10,2)"`
 	PlatformMargin   *decimal.Decimal `gorm:"type:decimal(10,2)"`
-	Pickup           RouteStop        `gorm:"embedded;embeddedPrefix:pickup_"`
-	Delivery         RouteStop        `gorm:"embedded;embeddedPrefix:delivery_"`
 
 	GroupWindowID *uuid.UUID `gorm:"type:uuid"`
 	CancelledAt   *time.Time `gorm:"type:timestamptz"`

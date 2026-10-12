@@ -29,6 +29,7 @@ type Package struct {
 type LogisticsLoad struct {
 	ID              uuid.UUID       `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
 	DeliveryOrderID uuid.UUID       `gorm:"type:uuid;not null;uniqueIndex"`
+	DeliveryOrder   *DeliveryOrder  `gorm:"foreignKey:DeliveryOrderID;references:ID"`
 	Packages        []Package       `gorm:"foreignKey:LogisticsLoadID"`
 	TotalWeightKg   decimal.Decimal `gorm:"type:decimal(10,2);not null"`
 	IsFragile       bool            `gorm:"not null;default:false"`

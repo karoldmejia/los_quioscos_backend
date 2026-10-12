@@ -44,3 +44,42 @@ func (s *AddressService) HandleAddressUpdated(ctx context.Context, event events.
 	log.Printf("Address upserted with UserID %s", event.UserID)
 	return nil
 }
+
+func (s *AddressService) CheckCoverage(ctx context.Context, pickupID string, deliveryID string) (bool, error) {
+	kiosk, err := s.repo.Get(ctx, pickupID)
+	if err != nil {
+		return false, err
+	}
+	if kiosk == nil {
+		log.Printf("Kiosk with %s ID does not have a default address", pickupID)
+		return false, fmt.Errorf("kiosk %s does not have a default address", pickupID)
+	}
+
+	client, err := s.repo.Get(ctx, deliveryID)
+	if err != nil {
+		return false, fmt.Errorf("user %s does not have a default address", deliveryID)
+	}
+	if client == nil {
+		log.Printf("User with %s ID does not a default address", deliveryID)
+		return false, fmt.Errorf("user %s does not have a default address", pickupID)
+	}
+
+	covered, err := s.repo.CheckCoverage(ctx, pickupID, deliveryID)
+	if err != nil {
+		return false, fmt.Errorf("checking coverage: %w", err)
+	}
+	return covered, err
+
+}
+
+func (s *AddressService) GetUserAddress(ctx context.Context, userID string) (*model.Address, error) {
+	userAddress, err := s.repo.Get(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if userAddress == nil {
+		log.Printf("User with %s ID does not have a default address", userID)
+		return nil, fmt.Errorf("user %s does not have a default address", userID)
+	}
+	return userAddress, nil
+}

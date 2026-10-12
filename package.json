@@ -32,6 +32,7 @@
     "@nestjs/microservices": "^11.2.3",
     "@nestjs/platform-express": "^11.2.3",
     "@nestjs/testing": "^11.2.3",
-    "file-type": "^16.5.4"
+    "file-type": "^16.5.4",
+    "kafkajs": "^2.2.4"
   }
 }

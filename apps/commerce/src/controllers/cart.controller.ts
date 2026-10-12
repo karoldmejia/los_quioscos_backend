@@ -87,11 +87,6 @@ export class CartController {
 
   // helper methods
 
-  @MessagePattern({ cmd: 'calculate_cart_total' })
-  async calculateCartTotal(@Payload() cartId: string): Promise<number> {
-    return await this.cartService.calculateCartTotal(cartId);
-  }
-
   @MessagePattern({ cmd: 'count_cart_items' })
   async countCartItems(@Payload() cartId: string): Promise<number> {
     return await this.cartService.countItems(cartId);

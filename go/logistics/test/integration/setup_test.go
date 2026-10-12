@@ -58,6 +58,7 @@ func TestMain(m *testing.M) {
 		&model.Carrier{},
 		&model.Vehicle{},
 		&model.Address{},
+		&model.RouteStop{},
 	); err != nil {
 		log.Fatalf("failed to migrate: %v", err)
 	}

@@ -11,7 +11,6 @@ import (
 	"github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/config"
 	"github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/consumer"
 	"github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/events"
-	"github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/model"
 	"github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/repository"
 	"github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/service"
 	"gorm.io/driver/postgres"
@@ -26,6 +25,11 @@ func main() {
 		log.Fatalf("failed to load config: %v", err)
 	}
 
+	if err := config.RunMigrations(cfg.DB.DSN); err != nil {
+		log.Fatalf("failed to run migratons: %v", err)
+	}
+	log.Println("migrations applied succesfully")
+
 	//bd
 	db, err := gorm.Open(postgres.Open(cfg.DB.DSN), &gorm.Config{})
 	if err != nil {
@@ -33,29 +37,19 @@ func main() {
 	}
 	log.Println("connected to database")
 
-	if err := db.AutoMigrate(
-		&model.DeliveryOrder{},
-		&model.LogisticsLoad{},
-		&model.Package{},
-		&model.Carrier{},
-		&model.Vehicle{},
-		&model.Address{},
-	); err != nil {
-		log.Fatalf("failed to migrate database: %v", err)
-	}
-	log.Println(("database migrated succesfully"))
-
 	// repositories
+	routeStopRepo := repository.NewRouteStopRepository(db)
 	deliveryRepo := repository.NewDeliveryOrderRepository(db)
 	carrierRepo := repository.NewCarrierRepository(db)
 	vehicleRepo := repository.NewVehicleRepository(db)
 	addressRepo := repository.NewAddressRepository(db)
 
 	// services
-	deliverySvc := service.NewDeliveryService(deliveryRepo)
+	routeStopSvc := service.NewRouteStopService(routeStopRepo)
 	carrierSvc := service.NewCarrierService(carrierRepo)
 	vehicleSvc := service.NewVehicleService(vehicleRepo)
 	addressSvc := service.NewAddressService(addressRepo)
+	deliverySvc := service.NewDeliveryService(deliveryRepo, addressSvc, routeStopSvc)
 
 	// consumers
 	orderPaidConsumer := consumer.NewConsumer[events.OrderPaidEvent](cfg.Kafka.Brokers, "order.paid", "logistics-order-paid")

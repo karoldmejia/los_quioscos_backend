@@ -548,7 +548,7 @@ export class DeliveryService {
             const order = await this.ordersService.createOrderWithItemsAndReserveStock({
                 orderData: {
                     userId: contract.business_id,
-                    kioskUserId: contract.kiosk_id ? parseInt(contract.kiosk_id) : 0
+                    kioskUserId: contract.kiosk_id ? (contract.kiosk_id) : ''
                 },
                 itemsData: itemsResult.items.map(item => ({
                     productId: item.product_id,

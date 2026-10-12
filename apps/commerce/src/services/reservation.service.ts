@@ -4,8 +4,7 @@ import { BatchReservationRepository } from '../repositories/impl/reservation.rep
 import { BatchRepository } from '../repositories/impl/batch.repository';
 import { BatchReservation } from '../entities/batch-reservation.entity';
 import { ReservationStatus } from '../enums/reservation-status.enum';
-import { ReservationRequestDTO } from '../dtos/reservation-request.dto';
-import { ReservationRequestItemDTO } from '../dtos/reservation-request-item.dto';
+import { ReservationRequestDTO, ReservationRequestItemDTO } from '../dtos/reservation-request.dto';
 import { BatchAllocationDTO } from '../dtos/batch-allocation.dto';
 import { validate } from 'class-validator';
 import { StockAvailabilityResponseDTO } from '../dtos/stock-availability-responde.dto';

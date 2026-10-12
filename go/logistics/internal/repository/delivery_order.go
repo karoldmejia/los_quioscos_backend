@@ -43,6 +43,7 @@ func (r *deliveryOrderRepository) CreateWithLoadAndPackages(ctx context.Context,
 		log.Printf("AFTER Create(order): order.ID=%s order.OrderID=%s", order.ID, order.OrderID)
 
 		load.DeliveryOrderID = order.ID
+		load.DeliveryOrder = order
 		log.Printf("load.DeliveryOrderID set to: %s", load.DeliveryOrderID)
 
 		if err := tx.Create(load).Error; err != nil {

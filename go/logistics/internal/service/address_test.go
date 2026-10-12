@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/events"
 	"github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/model"
 	"github.com/shopspring/decimal"
@@ -21,6 +22,12 @@ type mockAddressRepository struct {
 	deleteCalled bool
 	deletedAddr  *model.Address
 	deleteErr    error
+
+	covered               bool
+	checkCoverageErr      error
+	checkCoverageCalled   bool
+	checkCoverageKioskID  string
+	checkCoverageClientID string
 }
 
 func (m *mockAddressRepository) Upsert(ctx context.Context, a *model.Address) error {
@@ -37,6 +44,13 @@ func (m *mockAddressRepository) Delete(ctx context.Context, v *model.Address) er
 
 func (m *mockAddressRepository) Get(ctx context.Context, addressID string) (*model.Address, error) {
 	return m.existingAddr, m.getErr
+}
+
+func (m *mockAddressRepository) CheckCoverage(ctx context.Context, kioskID, clientID string) (bool, error) {
+	m.checkCoverageCalled = true
+	m.checkCoverageKioskID = kioskID
+	m.checkCoverageClientID = clientID
+	return m.covered, m.checkCoverageErr
 }
 
 func TestHandleAddressUpdated(t *testing.T) {
@@ -84,7 +98,6 @@ func TestHandleAddressUpdated(t *testing.T) {
 	t.Run("upserts customer address without radius", func(t *testing.T) {
 		customerEvent := validEvent
 		customerEvent.Role = "CUSTOMER"
-		// Para clientes, el radio es cero (que representa "no aplica").
 
 		mock := &mockAddressRepository{}
 		svc := NewAddressService(mock)
@@ -140,6 +153,142 @@ func TestHandleAddressUpdated(t *testing.T) {
 		svc := NewAddressService(mock)
 
 		err := svc.HandleAddressUpdated(context.Background(), validEvent)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+	})
+}
+
+func TestCheckCoverage(t *testing.T) {
+	kioskID := "550e8400-e29b-41d4-a716-446655440000"
+	clientID := "550e8400-e29b-41d4-a716-446655440001"
+
+	validKiosk := &model.Address{
+		UserID:   uuid.MustParse(kioskID),
+		Role:     "KIOSK",
+		Latitude: decimal.NewFromFloat(4.711),
+	}
+	t.Run("returns true when covered", func(t *testing.T) {
+		mock := &mockAddressRepository{
+			existingAddr: validKiosk,
+			covered:      true,
+		}
+		svc := NewAddressService(mock)
+
+		covered, err := svc.CheckCoverage(context.Background(), kioskID, clientID)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !covered {
+			t.Error("expected covered = true")
+		}
+		if !mock.checkCoverageCalled {
+			t.Error("expected repo.CheckCoverage to be called")
+		}
+	})
+
+	t.Run("returns false when not covered", func(t *testing.T) {
+		mock := &mockAddressRepository{
+			existingAddr: validKiosk,
+			covered:      false,
+		}
+		svc := NewAddressService(mock)
+
+		covered, err := svc.CheckCoverage(context.Background(), kioskID, clientID)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if covered {
+			t.Error("expected covered = false")
+		}
+	})
+
+	t.Run("fails when kiosk address not found", func(t *testing.T) {
+		mock := &mockAddressRepository{
+			existingAddr: nil, // no hay dirección
+		}
+		svc := NewAddressService(mock)
+
+		_, err := svc.CheckCoverage(context.Background(), kioskID, clientID)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if mock.checkCoverageCalled {
+			t.Error("expected repo.CheckCoverage NOT to be called")
+		}
+	})
+
+	t.Run("fails when repo Get fails", func(t *testing.T) {
+		mock := &mockAddressRepository{
+			getErr: errors.New("db down"),
+		}
+		svc := NewAddressService(mock)
+
+		_, err := svc.CheckCoverage(context.Background(), kioskID, clientID)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+	})
+
+	t.Run("fails when repo CheckCoverage fails", func(t *testing.T) {
+		mock := &mockAddressRepository{
+			existingAddr:     validKiosk,
+			checkCoverageErr: errors.New("postgis error"),
+		}
+		svc := NewAddressService(mock)
+
+		_, err := svc.CheckCoverage(context.Background(), kioskID, clientID)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+	})
+}
+
+func TestGetUserAddress(t *testing.T) {
+	validUserID := "550e8400-e29b-41d4-a716-446655440000"
+	validAddress := &model.Address{
+		UserID:   uuid.MustParse(validUserID),
+		Role:     "KIOSK",
+		Latitude: decimal.NewFromFloat(4.711),
+	}
+
+	t.Run("returns address successfully", func(t *testing.T) {
+		mock := &mockAddressRepository{
+			existingAddr: validAddress,
+		}
+		svc := NewAddressService(mock)
+
+		address, err := svc.GetUserAddress(context.Background(), validUserID)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if address == nil {
+			t.Fatal("expected address, got nil")
+		}
+		if address.UserID.String() != validUserID {
+			t.Errorf("userID = %s, want %s", address.UserID, validUserID)
+		}
+	})
+
+	t.Run("fails when address not found", func(t *testing.T) {
+		mock := &mockAddressRepository{
+			existingAddr: nil,
+		}
+		svc := NewAddressService(mock)
+
+		_, err := svc.GetUserAddress(context.Background(), validUserID)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+	})
+
+	t.Run("fails when repo Get fails", func(t *testing.T) {
+		mock := &mockAddressRepository{
+			getErr: errors.New("db down"),
+		}
+		svc := NewAddressService(mock)
+
+		_, err := svc.GetUserAddress(context.Background(), validUserID)
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
