@@ -13,7 +13,8 @@ import { CartStatus } from '../enums/cart-status.enum';
 import { CartToCheckoutDto } from '../dtos/cart-to-checkout.dto';
 import { CheckoutSessionResponseDto } from '../dtos/checkout-session-response.dto';
 import { CartService } from './cart.service';
-import { LogisticsLoadDto } from 'src/dtos/order-generation.dto';
+import { LogisticsLoadDto } from '../dtos/order-generation.dto';
+import { LogisticsClient } from '../clients/logistics.client';
 
 @Injectable()
 export class CheckoutService {
@@ -27,6 +28,7 @@ export class CheckoutService {
     private readonly productRepository: ProductRepository,
     private readonly orderService: OrderService,
     private readonly cartService: CartService,
+    private readonly logisticsClient: LogisticsClient
   ) { }
 
   /**
@@ -42,7 +44,7 @@ export class CheckoutService {
     const kioskGroups = await this.groupItemsByKioskWithPrices(cart);
 
     // 3. Create checkout session
-    const checkoutSession = await this.createCheckoutSession(cart, dto);
+    const checkoutSession = await this.createCheckoutSession(cart, Array.from(kioskGroups.keys()));
 
     // 4. Create orders for each kiosk
     const orders = await this.createKioskOrders(checkoutSession, kioskGroups);
@@ -146,7 +148,15 @@ export class CheckoutService {
   /**
    * Create checkout session
    */
-  private async createCheckoutSession(cart: Cart, dto: CartToCheckoutDto): Promise<CheckoutSession> {
+  private async createCheckoutSession(cart: Cart, kioskIds: string[]): Promise<CheckoutSession> {
+    
+    for (const kiosk of kioskIds) {
+      const {covered, reason} = await this.logisticsClient.checkCoverage(kiosk, cart.userId)
+      if (!covered){
+        throw new RpcException(`Delivery not available: ${reason}`)
+      }
+    }
+        
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + this.SESSION_TIMEOUT_MINUTES);
 

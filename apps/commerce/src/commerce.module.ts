@@ -13,6 +13,15 @@ import { ContractsModule } from './modules/contracts.module';
   imports: [
     ClientsModule.register([
       {
+        name: 'LOGISTICS_PACKAGE',
+        transport: Transport.GRPC,
+        options: {
+          package: 'logistics',
+          protoPath: join(__dirname, '..', 'contracts', 'logistics.proto'),
+          url: process.env.LOGISTICS_GRPC_URL || 'localhost:50053',
+        },
+      },
+      {
         name: 'USERS_PACKAGE',
         transport: Transport.GRPC,
         options: {

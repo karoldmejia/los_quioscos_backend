@@ -11,10 +11,14 @@ import (
 	"github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/config"
 	"github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/consumer"
 	"github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/events"
+	"github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/handler"
 	"github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/repository"
 	"github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/service"
+	"google.golang.org/grpc"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+
+	pb "github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/proto/logistics"
 )
 
 func main() {
@@ -51,6 +55,8 @@ func main() {
 	addressSvc := service.NewAddressService(addressRepo)
 	deliverySvc := service.NewDeliveryService(deliveryRepo, addressSvc, routeStopSvc)
 
+	grpcServer := grpc.NewServer()
+	pb.RegisterLogisticsServiceServer(grpcServer, handler.NewCoverageGRPCHandler(addressSvc))
 	// consumers
 	orderPaidConsumer := consumer.NewConsumer[events.OrderPaidEvent](cfg.Kafka.Brokers, "order.paid", "logistics-order-paid")
 	carrierActivatedConsumer := consumer.NewConsumer[events.CarrierActivatedEvent](cfg.Kafka.Brokers, "carrier.activated", "logistics-carrier-projection")

@@ -68,7 +68,7 @@ func (s *AddressService) CheckCoverage(ctx context.Context, pickupID string, del
 	if err != nil {
 		return false, fmt.Errorf("checking coverage: %w", err)
 	}
-	return covered, err
+	return covered, nil
 
 }
 

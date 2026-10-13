@@ -87,11 +87,14 @@ services:
     container_name: logistics
     env_file:
       - .env
+    ports:
+      - "50053:50053"
     environment:
       KAFKA_BROKERS: kafka:9092
       KAFKA_TOPIC_ORDER_PAID: order.paid
       KAFKA_GROUP_ID: logistics-group
       DATABASE_URL: host=postgres-logistics user=${DB_USER} password=${DB_PASSWORD} dbname=${DB_NAME} port=5432 sslmode=disable
+      GRPC_PORT: "50053"
     depends_on:
       postgres-logistics:
         condition: service_healthy

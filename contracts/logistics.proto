@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package logistics;
+
+option go_package = "github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/proto/logistics";
+
+service LogisticsService {
+    rpc CheckCoverage (CheckCoverageRequest) returns (CheckCoverageResponse) {}
+}
+
+message CheckCoverageRequest {
+    string pickupId = 1;
+    string deliveryId = 2;
+}
+
+message CheckCoverageResponse {
+    bool covered = 1;
+    string reason = 2;
+}
