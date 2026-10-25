@@ -152,7 +152,10 @@ func (r *groupingWindowRepository) AddDeliveryToWindow(ctx context.Context, wind
 		if err := tx.Model(delivery).Update("grouping_window_id", updated.ID).Error; err != nil {
 			return fmt.Errorf("adding delivery to window: %w", err)
 		}
-
+		delivery.Status = model.StatusWindowAssigned
+		if err := tx.Model(delivery).Update("status", model.StatusWindowAssigned).Error; err != nil {
+			return fmt.Errorf("updating delivery status: %w", err)
+		}
 		if err := tx.Model(&updated).Update("order_count", gorm.Expr("order_count + 1")).Error; err != nil {
 			return fmt.Errorf("updating window order count: %w", err)
 		}

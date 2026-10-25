@@ -24,3 +24,7 @@ type OrderPaidEvent struct {
 	Items         []OrderPaidItem    `json:"items"`
 	LogisticsLoad LogisticsLoadEvent `json:"logisticsLoad"`
 }
+
+type OrderCancelled struct {
+	OrderID string `json:"orderId"`
+}

@@ -51,6 +51,7 @@ func (s *GroupingWindowService) AddDeliveryToWindow(ctx context.Context, orderID
 			slog.InfoContext(ctx, "candidate window rejected", "windowId", window.ID, "orderId", delivery.OrderID, "reason", err.Error())
 			continue
 		}
+
 		return nil
 	}
 	slog.InfoContext(ctx, "no candidate window accepted the delivery, creating new window", "orderId", delivery.OrderID, "candidates", len(candidateWindows))

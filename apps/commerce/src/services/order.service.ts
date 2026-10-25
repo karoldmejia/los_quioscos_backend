@@ -307,7 +307,7 @@ export class OrderService {
       }
 
       await this.orderRepository.markCancelled(orderId);
-
+      this.kafkaClient.emit('order.cancelled', orderId)
       this.logger.log(`Order ${orderId} finally cancelled`);
     } catch (error) {
       if (error instanceof RpcException) throw error;

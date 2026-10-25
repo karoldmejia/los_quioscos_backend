@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"log/slog"
+	"slices"
 
 	"github.com/google/uuid"
 	"github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/events"
@@ -159,4 +160,39 @@ func (s *DeliveryService) FindPendingWithoutWindow(ctx context.Context, limit in
 		return nil, nil
 	}
 	return deliveries, nil
+}
+
+func (s *DeliveryService) CancelDeliveryOrder(ctx context.Context, event events.OrderCancelled) error {
+	if event.OrderID == "" {
+		return fmt.Errorf("event missing required fields: orderId=%q", event.OrderID)
+	}
+	existing, err := s.repo.FindByOrderID(ctx, event.OrderID)
+	if err != nil {
+		return err
+	}
+	if existing == nil {
+		slog.InfoContext(ctx, "DeliveryOrder does not exists for order %s", "orderId", event.OrderID)
+		return nil
+	}
+	if existing.Status == model.StatusCancelled || existing.CancelledAt != nil {
+		slog.InfoContext(ctx, "Delivery is already cancelled %s", "orderId", event.OrderID)
+		return nil
+	}
+
+	noPenalization := []model.DeliveryStatus{model.StatusPending, model.StatusScheduled}
+
+	if !slices.Contains(noPenalization, existing.Status) {
+		slog.InfoContext(ctx, "Delivery cannot be cancelled %s", "orderId", event.OrderID)
+		return nil
+	}
+
+	var windowID *string
+	if existing.GroupingWindowID != nil {
+		s := existing.GroupingWindowID.String()
+		windowID = &s
+	}
+	if err := s.repo.CancelDeliveryOrder(ctx, *existing, windowID); err != nil {
+		return err
+	}
+	return nil
 }

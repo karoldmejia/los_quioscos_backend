@@ -11,7 +11,7 @@ type DeliveryStatus string
 
 const (
 	StatusPending         DeliveryStatus = "PENDING"
-	StatusInQueue         DeliveryStatus = "IN_QUEUE"
+	StatusWindowAssigned  DeliveryStatus = "WINDOW_ASSIGNED"
 	StatusScheduled       DeliveryStatus = "SCHEDULED"
 	StatusCarrierAssigned DeliveryStatus = "CARRIER_ASSIGNED"
 	StatusKioskReady      DeliveryStatus = "KIOSK_READY"

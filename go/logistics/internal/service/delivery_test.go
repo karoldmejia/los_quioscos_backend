@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
@@ -26,6 +27,11 @@ type mockDeliveryOrderRepository struct {
 	pendingOrders []model.DeliveryOrder
 	pendingErr    error
 	pendingLimit  int
+
+	cancelErr         error
+	cancelledDelivery *model.DeliveryOrder
+	cancelledWindowID *string
+	cancelCalls       int
 }
 
 func (m *mockDeliveryOrderRepository) FindByOrderID(ctx context.Context, orderID string) (*model.DeliveryOrder, error) {
@@ -50,6 +56,17 @@ func (m *mockDeliveryOrderRepository) FindPendingWithoutWindow(
 ) ([]model.DeliveryOrder, error) {
 	m.pendingLimit = limit
 	return m.pendingOrders, m.pendingErr
+}
+
+func (m *mockDeliveryOrderRepository) CancelDeliveryOrder(
+	ctx context.Context,
+	delivery model.DeliveryOrder,
+	windowID *string,
+) error {
+	m.cancelCalls++
+	m.cancelledDelivery = &delivery
+	m.cancelledWindowID = windowID
+	return m.cancelErr
 }
 
 type mockAddressService struct {
@@ -383,6 +400,152 @@ func TestFindPendingWithoutWindow(t *testing.T) {
 		_, err := svc.FindPendingWithoutWindow(context.Background(), 100)
 		if err == nil {
 			t.Fatal("expected error, got nil")
+		}
+	})
+}
+
+func TestCancelDeliveryOrder(t *testing.T) {
+	orderID := uuid.New()
+	windowID := uuid.New()
+
+	validOrder := func() *model.DeliveryOrder {
+		return &model.DeliveryOrder{
+			ID:               orderID,
+			OrderID:          uuid.New(),
+			Status:           model.StatusPending,
+			GroupingWindowID: nil,
+		}
+	}
+
+	t.Run("cancels a pending order without window", func(t *testing.T) {
+		mockRepo := &mockDeliveryOrderRepository{existingOrder: validOrder()}
+		svc := NewDeliveryService(mockRepo, &mockAddressService{}, &mockRouteStopService{})
+
+		event := events.OrderCancelled{OrderID: mockRepo.existingOrder.OrderID.String()}
+		err := svc.CancelDeliveryOrder(context.Background(), event)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if mockRepo.cancelCalls != 1 {
+			t.Errorf("CancelDeliveryOrder called %d times, want 1", mockRepo.cancelCalls)
+		}
+		if mockRepo.cancelledWindowID != nil {
+			t.Errorf("expected nil windowID, got %v", *mockRepo.cancelledWindowID)
+		}
+	})
+
+	t.Run("cancels a scheduled order with window, passing the window ID", func(t *testing.T) {
+		order := validOrder()
+		order.Status = model.StatusScheduled
+		order.GroupingWindowID = &windowID
+
+		mockRepo := &mockDeliveryOrderRepository{existingOrder: order}
+		svc := NewDeliveryService(mockRepo, &mockAddressService{}, &mockRouteStopService{})
+
+		event := events.OrderCancelled{OrderID: order.OrderID.String()}
+		err := svc.CancelDeliveryOrder(context.Background(), event)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if mockRepo.cancelCalls != 1 {
+			t.Errorf("CancelDeliveryOrder called %d times, want 1", mockRepo.cancelCalls)
+		}
+		if mockRepo.cancelledWindowID == nil {
+			t.Fatal("expected non-nil windowID")
+		}
+		if *mockRepo.cancelledWindowID != windowID.String() {
+			t.Errorf("windowID = %s, want %s", *mockRepo.cancelledWindowID, windowID)
+		}
+	})
+
+	t.Run("fails when event has empty OrderID", func(t *testing.T) {
+		mockRepo := &mockDeliveryOrderRepository{}
+		svc := NewDeliveryService(mockRepo, &mockAddressService{}, &mockRouteStopService{})
+
+		err := svc.CancelDeliveryOrder(context.Background(), events.OrderCancelled{OrderID: ""})
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if mockRepo.cancelCalls != 0 {
+			t.Errorf("CancelDeliveryOrder called %d times, want 0", mockRepo.cancelCalls)
+		}
+	})
+
+	t.Run("propagates FindByOrderID error", func(t *testing.T) {
+		mockRepo := &mockDeliveryOrderRepository{findErr: errors.New("db down")}
+		svc := NewDeliveryService(mockRepo, &mockAddressService{}, &mockRouteStopService{})
+
+		err := svc.CancelDeliveryOrder(context.Background(), events.OrderCancelled{OrderID: "any"})
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if mockRepo.cancelCalls != 0 {
+			t.Errorf("CancelDeliveryOrder called %d times, want 0", mockRepo.cancelCalls)
+		}
+	})
+
+	t.Run("returns nil when order does not exist", func(t *testing.T) {
+		mockRepo := &mockDeliveryOrderRepository{existingOrder: nil}
+		svc := NewDeliveryService(mockRepo, &mockAddressService{}, &mockRouteStopService{})
+
+		err := svc.CancelDeliveryOrder(context.Background(), events.OrderCancelled{OrderID: "any"})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if mockRepo.cancelCalls != 0 {
+			t.Errorf("CancelDeliveryOrder called %d times, want 0", mockRepo.cancelCalls)
+		}
+	})
+
+	t.Run("skips when already cancelled with CancelledAt set", func(t *testing.T) {
+		now := time.Now()
+		order := validOrder()
+		order.Status = model.StatusCancelled
+		order.CancelledAt = &now
+
+		mockRepo := &mockDeliveryOrderRepository{existingOrder: order}
+		svc := NewDeliveryService(mockRepo, &mockAddressService{}, &mockRouteStopService{})
+
+		err := svc.CancelDeliveryOrder(context.Background(), events.OrderCancelled{OrderID: order.OrderID.String()})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if mockRepo.cancelCalls != 0 {
+			t.Errorf("CancelDeliveryOrder called %d times, want 0 (already cancelled)", mockRepo.cancelCalls)
+		}
+	})
+
+	t.Run("skips when status not in no-penalization set", func(t *testing.T) {
+		order := validOrder()
+		order.Status = model.StatusInProgress
+
+		mockRepo := &mockDeliveryOrderRepository{existingOrder: order}
+		svc := NewDeliveryService(mockRepo, &mockAddressService{}, &mockRouteStopService{})
+
+		err := svc.CancelDeliveryOrder(context.Background(), events.OrderCancelled{OrderID: order.OrderID.String()})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if mockRepo.cancelCalls != 0 {
+			t.Errorf("CancelDeliveryOrder called %d times, want 0 (status not cancellable)", mockRepo.cancelCalls)
+		}
+	})
+
+	t.Run("propagates repo CancelDeliveryOrder error", func(t *testing.T) {
+		mockRepo := &mockDeliveryOrderRepository{
+			existingOrder: validOrder(),
+			cancelErr:     errors.New("window not active"),
+		}
+		svc := NewDeliveryService(mockRepo, &mockAddressService{}, &mockRouteStopService{})
+
+		err := svc.CancelDeliveryOrder(context.Background(), events.OrderCancelled{
+			OrderID: mockRepo.existingOrder.OrderID.String(),
+		})
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if mockRepo.cancelCalls != 1 {
+			t.Errorf("CancelDeliveryOrder called %d times, want 1", mockRepo.cancelCalls)
 		}
 	})
 }

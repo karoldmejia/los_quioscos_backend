@@ -52,13 +52,14 @@ func TestMain(m *testing.M) {
 		log.Fatalf("failed to connect to db: %v", err)
 	}
 	if err := testDB.AutoMigrate(
+		&model.GroupingWindow{},
+		&model.RouteStop{},
 		&model.DeliveryOrder{},
 		&model.LogisticsLoad{},
 		&model.Package{},
 		&model.Carrier{},
 		&model.Vehicle{},
 		&model.Address{},
-		&model.RouteStop{},
 	); err != nil {
 		log.Fatalf("failed to migrate: %v", err)
 	}

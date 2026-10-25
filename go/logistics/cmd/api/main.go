@@ -65,6 +65,7 @@ func main() {
 	pb.RegisterLogisticsServiceServer(grpcServer, handler.NewCoverageGRPCHandler(addressSvc))
 	// consumers
 	orderPaidConsumer := consumer.NewConsumer[events.OrderPaidEvent](cfg.Kafka.Brokers, "order.paid", "logistics-order-paid")
+	orderCancelledConsumer := consumer.NewConsumer[events.OrderCancelled](cfg.Kafka.Brokers, "order.cancelled", "logistics-order-cancelled")
 	carrierActivatedConsumer := consumer.NewConsumer[events.CarrierActivatedEvent](cfg.Kafka.Brokers, "carrier.activated", "logistics-carrier-projection")
 	carrierUpdatedConsumer := consumer.NewConsumer[events.CarrierUpdatedEvent](cfg.Kafka.Brokers, "carrier.updated", "logistics-carrier-projection")
 	carrierDeletedConsumer := consumer.NewConsumer[events.CarrierDeletedEvent](cfg.Kafka.Brokers, "carrier.deleted", "logistics-carrier-projection")
@@ -89,6 +90,10 @@ func main() {
 		{
 			name:  "order.paid",
 			start: func() { orderPaidConsumer.Start(ctx, deliverySvc.HandleOrderPaid) },
+		},
+		{
+			name:  "order.cancelled",
+			start: func() { orderCancelledConsumer.Start(ctx, deliverySvc.CancelDeliveryOrder) },
 		},
 		{
 			name:  "carrier.activated",
