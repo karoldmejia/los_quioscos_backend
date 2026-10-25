@@ -52,9 +52,9 @@ type DeliveryOrder struct {
 	BaseShippingCost *decimal.Decimal `gorm:"type:decimal(10,2)"`
 	PlatformMargin   *decimal.Decimal `gorm:"type:decimal(10,2)"`
 
-	GroupWindowID *uuid.UUID `gorm:"type:uuid"`
-	CancelledAt   *time.Time `gorm:"type:timestamptz"`
-	CompletedAt   *time.Time `gorm:"type:timestamptz"`
-	CreatedAt     time.Time  `gorm:"type:timestamptz;autoCreateTime"`
-	UpdatedAt     time.Time  `gorm:"type:timestamptz;autoUpdateTime"`
+	GroupingWindowID *uuid.UUID `gorm:"type:uuid;index"`
+	CancelledAt      *time.Time `gorm:"type:timestamptz"`
+	CompletedAt      *time.Time `gorm:"type:timestamptz"`
+	CreatedAt        time.Time  `gorm:"type:timestamptz;autoCreateTime"`
+	UpdatedAt        time.Time  `gorm:"type:timestamptz;autoUpdateTime"`
 }

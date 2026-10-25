@@ -12,13 +12,20 @@ import (
 	"github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/model"
 )
 
+// --- Mocks ---
+
 type mockDeliveryOrderRepository struct {
-	existingOrder   *model.DeliveryOrder
-	findErr         error
+	existingOrder *model.DeliveryOrder
+	findErr       error
+
 	createErr       error
 	createdOrder    *model.DeliveryOrder
 	createdLoad     *model.LogisticsLoad
 	createdPackages []model.Package
+
+	pendingOrders []model.DeliveryOrder
+	pendingErr    error
+	pendingLimit  int
 }
 
 func (m *mockDeliveryOrderRepository) FindByOrderID(ctx context.Context, orderID string) (*model.DeliveryOrder, error) {
@@ -37,13 +44,26 @@ func (m *mockDeliveryOrderRepository) CreateWithLoadAndPackages(
 	return m.createErr
 }
 
+func (m *mockDeliveryOrderRepository) FindPendingWithoutWindow(
+	ctx context.Context,
+	limit int,
+) ([]model.DeliveryOrder, error) {
+	m.pendingLimit = limit
+	return m.pendingOrders, m.pendingErr
+}
+
 type mockAddressService struct {
 	address *model.Address
 	err     error
+	calls   int
 }
 
 func (m *mockAddressService) GetUserAddress(ctx context.Context, userID string) (*model.Address, error) {
-	return m.address, m.err
+	m.calls++
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.address, nil
 }
 
 type mockRouteStopService struct {
@@ -61,7 +81,10 @@ func (m *mockRouteStopService) CreateRouteStop(
 	if m.err != nil {
 		return nil, m.err
 	}
-	return m.routeStop, nil
+	// Devolver una copia con el StopType correcto
+	rs := *m.routeStop
+	rs.StopType = stopType
+	return &rs, nil
 }
 
 // --- Tests ---
@@ -153,7 +176,6 @@ func TestHandleOrderPaid(t *testing.T) {
 
 	validRouteStop := &model.RouteStop{
 		ID:        uuid.New(),
-		StopType:  model.StopTypePickup,
 		Latitude:  decimal.NewFromFloat(4.711),
 		Longitude: decimal.NewFromFloat(-74.0721),
 	}
@@ -178,6 +200,16 @@ func TestHandleOrderPaid(t *testing.T) {
 		if mockStop.callCount != 2 {
 			t.Errorf("CreateRouteStop called %d times, want 2", mockStop.callCount)
 		}
+		if mockAddr.calls != 2 {
+			t.Errorf("GetUserAddress called %d times, want 2", mockAddr.calls)
+		}
+		// Verificar que los RouteStop del pedido tienen los IDs correctos
+		if mockRepo.createdOrder.PickupRouteStopID == uuid.Nil {
+			t.Error("expected PickupRouteStopID to be set")
+		}
+		if mockRepo.createdOrder.DeliveryRouteStopID == uuid.Nil {
+			t.Error("expected DeliveryRouteStopID to be set")
+		}
 	})
 
 	t.Run("skips if order already exists", func(t *testing.T) {
@@ -198,6 +230,9 @@ func TestHandleOrderPaid(t *testing.T) {
 		}
 		if mockStop.callCount != 0 {
 			t.Errorf("CreateRouteStop called %d times, want 0", mockStop.callCount)
+		}
+		if mockAddr.calls != 0 {
+			t.Errorf("GetUserAddress called %d times, want 0", mockAddr.calls)
 		}
 	})
 
@@ -234,6 +269,9 @@ func TestHandleOrderPaid(t *testing.T) {
 		if mockRepo.createdOrder != nil {
 			t.Error("expected no order to be created")
 		}
+		if mockStop.callCount != 0 {
+			t.Errorf("CreateRouteStop called %d times, want 0", mockStop.callCount)
+		}
 	})
 
 	t.Run("fails when route stop service fails", func(t *testing.T) {
@@ -262,6 +300,87 @@ func TestHandleOrderPaid(t *testing.T) {
 		svc := NewDeliveryService(mockRepo, mockAddr, mockStop)
 
 		err := svc.HandleOrderPaid(context.Background(), validEvent)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+	})
+}
+
+func TestFindByOrderID(t *testing.T) {
+	t.Run("returns order when found", func(t *testing.T) {
+		existing := &model.DeliveryOrder{ID: uuid.New()}
+		mockRepo := &mockDeliveryOrderRepository{existingOrder: existing}
+		svc := NewDeliveryService(mockRepo, &mockAddressService{}, &mockRouteStopService{})
+
+		got, err := svc.FindByOrderID(context.Background(), "any-id")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got == nil || got.ID != existing.ID {
+			t.Errorf("expected order %s, got %v", existing.ID, got)
+		}
+	})
+
+	t.Run("returns error when not found", func(t *testing.T) {
+		mockRepo := &mockDeliveryOrderRepository{existingOrder: nil}
+		svc := NewDeliveryService(mockRepo, &mockAddressService{}, &mockRouteStopService{})
+
+		_, err := svc.FindByOrderID(context.Background(), "any-id")
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+	})
+
+	t.Run("propagates repo error", func(t *testing.T) {
+		mockRepo := &mockDeliveryOrderRepository{findErr: errors.New("db down")}
+		svc := NewDeliveryService(mockRepo, &mockAddressService{}, &mockRouteStopService{})
+
+		_, err := svc.FindByOrderID(context.Background(), "any-id")
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+	})
+}
+
+func TestFindPendingWithoutWindow(t *testing.T) {
+	t.Run("returns pending orders", func(t *testing.T) {
+		orders := []model.DeliveryOrder{
+			{ID: uuid.New()},
+			{ID: uuid.New()},
+		}
+		mockRepo := &mockDeliveryOrderRepository{pendingOrders: orders}
+		svc := NewDeliveryService(mockRepo, &mockAddressService{}, &mockRouteStopService{})
+
+		got, err := svc.FindPendingWithoutWindow(context.Background(), 100)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(got) != 2 {
+			t.Errorf("expected 2 orders, got %d", len(got))
+		}
+		if mockRepo.pendingLimit != 100 {
+			t.Errorf("expected limit 100, got %d", mockRepo.pendingLimit)
+		}
+	})
+
+	t.Run("returns nil when empty", func(t *testing.T) {
+		mockRepo := &mockDeliveryOrderRepository{pendingOrders: nil}
+		svc := NewDeliveryService(mockRepo, &mockAddressService{}, &mockRouteStopService{})
+
+		got, err := svc.FindPendingWithoutWindow(context.Background(), 100)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != nil {
+			t.Errorf("expected nil, got %v", got)
+		}
+	})
+
+	t.Run("propagates repo error", func(t *testing.T) {
+		mockRepo := &mockDeliveryOrderRepository{pendingErr: errors.New("db down")}
+		svc := NewDeliveryService(mockRepo, &mockAddressService{}, &mockRouteStopService{})
+
+		_, err := svc.FindPendingWithoutWindow(context.Background(), 100)
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}

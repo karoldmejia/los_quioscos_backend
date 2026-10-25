@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"log/slog"
 
 	"github.com/google/uuid"
 	"github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/events"
@@ -134,4 +135,28 @@ func (s *DeliveryService) createRouteStopsFromAddresses(ctx context.Context, pic
 
 	return pickupRouteStop, deliveryRouteStop, nil
 
+}
+
+func (s *DeliveryService) FindByOrderID(ctx context.Context, orderID string) (*model.DeliveryOrder, error) {
+	delivery, err := s.repo.FindByOrderID(ctx, orderID)
+	if err != nil {
+		return nil, err
+	}
+	if delivery == nil {
+		slog.InfoContext(ctx, "delivery order not found", "orderId", orderID)
+		return nil, fmt.Errorf("delivery order %s not found", orderID)
+	}
+	return delivery, nil
+}
+
+func (s *DeliveryService) FindPendingWithoutWindow(ctx context.Context, limit int) ([]model.DeliveryOrder, error) {
+	deliveries, err := s.repo.FindPendingWithoutWindow(ctx, limit)
+	if err != nil {
+		return nil, err
+	}
+	if len(deliveries) == 0 {
+		slog.InfoContext(ctx, "there are not pending deliveries to be added to windows")
+		return nil, nil
+	}
+	return deliveries, nil
 }

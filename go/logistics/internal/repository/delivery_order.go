@@ -11,6 +11,7 @@ import (
 type DeliveryOrderRepository interface {
 	FindByOrderID(ctx context.Context, orderID string) (*model.DeliveryOrder, error)
 	CreateWithLoadAndPackages(ctx context.Context, order *model.DeliveryOrder, load *model.LogisticsLoad, packages []model.Package) error
+	FindPendingWithoutWindow(ctx context.Context, limit int) ([]model.DeliveryOrder, error)
 }
 
 type deliveryOrderRepository struct {
@@ -57,4 +58,20 @@ func (r *deliveryOrderRepository) CreateWithLoadAndPackages(ctx context.Context,
 		}
 		return nil
 	})
+}
+
+func (r *deliveryOrderRepository) FindPendingWithoutWindow(ctx context.Context, limit int) ([]model.DeliveryOrder, error) {
+	var deliveries []model.DeliveryOrder
+	err := r.db.WithContext(ctx).
+		Where("status=?", model.StatusPending).
+		Where("grouping_window_id IS NULL").
+		Where("delivery_mode = ?", model.DeliveryModeGrouped).
+		Order("created_at ASC").
+		Limit(limit).
+		Find(&deliveries).Error
+
+	if err != nil {
+		return nil, err
+	}
+	return deliveries, nil
 }

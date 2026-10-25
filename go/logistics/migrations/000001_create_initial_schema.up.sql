@@ -44,6 +44,20 @@ CREATE TABLE route_stops (
     longitude  numeric(10,7) NOT NULL
 );
 
+CREATE TABLE grouping_windows (
+    id                       uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    status varchar(50) NOT NULL DEFAULT 'ACTIVE',
+    max_time_minutes integer NOT NULL DEFAULT 60,
+    max_orders integer NOT NULL DEFAULT 6,
+    order_count integer NOT NULL DEFAULT 0,
+    opened_at timestamptz NOT NULL DEFAULT now(),
+    updated_at               timestamptz NOT NULL DEFAULT now(),
+    closed_at timestamptz,
+    close_reason varchar(100),
+)
+
+CREATE INDEX idx_grouping_windows_status_opened ON grouping_windows(status, opened_at)
+
 CREATE TABLE delivery_orders (
     id                       uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     order_id                 uuid NOT NULL,
@@ -57,7 +71,7 @@ CREATE TABLE delivery_orders (
     shipping_cost            numeric(10,2),
     base_shipping_cost       numeric(10,2),
     platform_margin          numeric(10,2),
-    group_window_id          uuid,
+    grouping_window_id          uuid,
     cancelled_at             timestamptz,
     completed_at             timestamptz,
     created_at               timestamptz NOT NULL DEFAULT now(),
@@ -66,13 +80,17 @@ CREATE TABLE delivery_orders (
     CONSTRAINT fk_delivery_orders_pickup_route_stop
         FOREIGN KEY (pickup_route_stop_id) REFERENCES route_stops (id),
     CONSTRAINT fk_delivery_orders_delivery_route_stop
-        FOREIGN KEY (delivery_route_stop_id) REFERENCES route_stops (id)
+        FOREIGN KEY (delivery_route_stop_id) REFERENCES route_stops (id),
+    CONSTRAINT fk_grouping_windows_orders
+        FOREIGN KEY (grouping_window_id) REFERENCES grouping_windows (id)
 );
 
 CREATE INDEX idx_delivery_orders_pickup_route_stop_id
     ON delivery_orders (pickup_route_stop_id);
 CREATE INDEX idx_delivery_orders_delivery_route_stop_id
     ON delivery_orders (delivery_route_stop_id);
+CREATE INDEX idx_delivery_orders_grouping_window_id
+    ON delivery_orders (grouping_window_id);
     
 CREATE TABLE logistics_loads (
     id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -7,11 +7,13 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/config"
 	"github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/consumer"
 	"github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/events"
 	"github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/handler"
+	"github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/logging"
 	"github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/repository"
 	"github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/service"
 	"google.golang.org/grpc"
@@ -22,8 +24,10 @@ import (
 )
 
 func main() {
-	// configuration
+	logger := logging.Init(os.Getenv("ENV"))
+	logger.Info("starting logistics service")
 
+	// configuration
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
@@ -47,6 +51,7 @@ func main() {
 	carrierRepo := repository.NewCarrierRepository(db)
 	vehicleRepo := repository.NewVehicleRepository(db)
 	addressRepo := repository.NewAddressRepository(db)
+	windowRepo := repository.NewGroupingWindowRepository(db)
 
 	// services
 	routeStopSvc := service.NewRouteStopService(routeStopRepo)
@@ -54,6 +59,7 @@ func main() {
 	vehicleSvc := service.NewVehicleService(vehicleRepo)
 	addressSvc := service.NewAddressService(addressRepo)
 	deliverySvc := service.NewDeliveryService(deliveryRepo, addressSvc, routeStopSvc)
+	windowSvc := service.NewGroupingWindowService(windowRepo, deliverySvc)
 
 	grpcServer := grpc.NewServer()
 	pb.RegisterLogisticsServiceServer(grpcServer, handler.NewCoverageGRPCHandler(addressSvc))
@@ -70,6 +76,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	go service.StartPendingOrdersJob(ctx, windowSvc, 2*time.Minute)
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
