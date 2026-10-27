@@ -78,6 +78,7 @@ func main() {
 	defer cancel()
 
 	go service.StartPendingOrdersJob(ctx, windowSvc, 2*time.Minute)
+	go service.CheckActiveWindowsJob(ctx, windowSvc, 1*time.Minute)
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 

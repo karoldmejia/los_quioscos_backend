@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/karoldmejia/los_quioscos_backend/go/logistics/internal/model"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -17,6 +19,7 @@ type GroupingWindowRepository interface {
 	Get(ctx context.Context, windowID string) (*model.GroupingWindow, error)
 	GetCandidateWindowsForDelivery(ctx context.Context, pickupID, deliveryID string) ([]model.GroupingWindow, error)
 	AddDeliveryToWindow(ctx context.Context, window *model.GroupingWindow, delivery *model.DeliveryOrder) error
+	CloseActiveWindows(ctx context.Context) ([]model.GroupingWindow, error)
 }
 
 type groupingWindowRepository struct {
@@ -165,4 +168,90 @@ func (r *groupingWindowRepository) AddDeliveryToWindow(ctx context.Context, wind
 		return err
 	}
 	return nil
+}
+
+func (r *groupingWindowRepository) closeWindow(ctx context.Context, windowID uuid.UUID, reason model.CloseReason) (bool, error) {
+	var keep bool
+
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var w model.GroupingWindow
+
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&w, "id=? AND status = ?", windowID, model.WindowStatusActive).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil
+			}
+			return fmt.Errorf("loading window for update: %w", err)
+		}
+		if err := tx.Model(&w).Update("status", model.WindowStatusClosed).Error; err != nil {
+			return fmt.Errorf("updating delivery status: %w", err)
+		}
+		var count int64
+		if err := tx.Model(&model.DeliveryOrder{}).
+			Where("grouping_window_id = ? AND status != ?", w.ID, model.StatusCancelled).
+			Count(&count).Error; err != nil {
+			return err
+		}
+		if count == 0 {
+			if err := tx.Delete(&w).Error; err != nil {
+				return err
+			}
+			keep = false
+			return nil
+		}
+		if err := tx.Model(&w).Updates(map[string]interface{}{
+			"status":       model.WindowStatusClosed,
+			"closed_at":    time.Now(),
+			"close_reason": reason,
+		}).Error; err != nil {
+			return err
+		}
+		keep = true
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+	return keep, nil
+}
+
+func (r *groupingWindowRepository) CloseActiveWindows(ctx context.Context) ([]model.GroupingWindow, error) {
+	var expired []model.GroupingWindow
+	var full []model.GroupingWindow
+	var windowsForRoutes []model.GroupingWindow
+	err := r.db.WithContext(ctx).
+		Where("status = ?", model.WindowStatusActive).
+		Where("opened at + make_interval(mins => max_time_minutes) <= NOW").
+		Find(&expired).Error
+	if err != nil {
+		return nil, err
+	}
+	err = r.db.WithContext(ctx).
+		Where("status = ?", model.WindowStatusActive).
+		Where("order_count >= max_orders").
+		Find(&full).Error
+	if err != nil {
+		return nil, err
+	}
+
+	for _, w := range expired {
+		keep, err := r.closeWindow(ctx, w.ID, model.CloseReasonTimeReached)
+		if err != nil {
+			return nil, err
+		}
+		if keep {
+			windowsForRoutes = append(windowsForRoutes, w)
+		}
+	}
+
+	for _, w := range full {
+		keep, err := r.closeWindow(ctx, w.ID, model.CloseReasonMaxOrdersReached)
+		if err != nil {
+			return nil, err
+		}
+		if keep {
+			windowsForRoutes = append(windowsForRoutes, w)
+		}
+	}
+
+	return windowsForRoutes, nil
 }

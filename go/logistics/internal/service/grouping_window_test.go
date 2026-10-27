@@ -28,6 +28,15 @@ type mockGroupingWindowRepository struct {
 	addedWindow   *model.GroupingWindow
 	addedDelivery *model.DeliveryOrder
 	addCallCount  int
+
+	closeWindowsResult []model.GroupingWindow
+	closeWindowsErr    error
+	closeWindowsCalled bool
+}
+
+func (m *mockGroupingWindowRepository) CloseActiveWindows(ctx context.Context) ([]model.GroupingWindow, error) {
+	m.closeWindowsCalled = true
+	return m.closeWindowsResult, m.closeWindowsErr
 }
 
 func (m *mockGroupingWindowRepository) Upsert(ctx context.Context, window *model.GroupingWindow) (*model.GroupingWindow, error) {
@@ -368,4 +377,96 @@ func TestProcessPendingOrders(t *testing.T) {
 			t.Fatal("expected error, got nil")
 		}
 	})
+}
+
+func TestCloseActiveWindows(t *testing.T) {
+	t.Run("closes windows and estimates routes", func(t *testing.T) {
+		window1 := validWindow()
+		window2 := validWindow()
+
+		mockRepo := &mockGroupingWindowRepository{
+			closeWindowsResult: []model.GroupingWindow{window1, window2},
+		}
+		svc := NewGroupingWindowService(mockRepo, &mockDeliveryOrderProvider{})
+
+		err := svc.closeActiveWindows(context.Background())
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !mockRepo.closeWindowsCalled {
+			t.Error("expected CloseActiveWindows to be called")
+		}
+	})
+
+	t.Run("returns nil when no windows to close", func(t *testing.T) {
+		mockRepo := &mockGroupingWindowRepository{
+			closeWindowsResult: []model.GroupingWindow{},
+		}
+		svc := NewGroupingWindowService(mockRepo, &mockDeliveryOrderProvider{})
+
+		err := svc.closeActiveWindows(context.Background())
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("propagates error from CloseActiveWindows", func(t *testing.T) {
+		mockRepo := &mockGroupingWindowRepository{
+			closeWindowsErr: errors.New("db down"),
+		}
+		svc := NewGroupingWindowService(mockRepo, &mockDeliveryOrderProvider{})
+
+		err := svc.closeActiveWindows(context.Background())
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+	})
+}
+
+func TestStartPendingOrdersJob_StopsOnContextCancel(t *testing.T) {
+	mockRepo := &mockGroupingWindowRepository{}
+	mockDelivery := &mockDeliveryOrderProvider{pending: []model.DeliveryOrder{}}
+	svc := NewGroupingWindowService(mockRepo, mockDelivery)
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	done := make(chan struct{})
+	go func() {
+		StartPendingOrdersJob(ctx, svc, 10*time.Millisecond)
+		close(done)
+	}()
+
+	// Esperar un poco para que el ticker se dispare al menos una vez
+	time.Sleep(30 * time.Millisecond)
+	cancel()
+
+	select {
+	case <-done:
+		// El job terminó correctamente
+	case <-time.After(1 * time.Second):
+		t.Fatal("job did not stop after context cancellation")
+	}
+}
+
+func TestCheckActiveWindowsJob_StopsOnContextCancel(t *testing.T) {
+	mockRepo := &mockGroupingWindowRepository{}
+	svc := NewGroupingWindowService(mockRepo, &mockDeliveryOrderProvider{})
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	done := make(chan struct{})
+	go func() {
+		CheckActiveWindowsJob(ctx, svc, 10*time.Millisecond)
+		close(done)
+	}()
+
+	time.Sleep(30 * time.Millisecond)
+	cancel()
+
+	select {
+	case <-done:
+		// El job terminó correctamente
+	case <-time.After(1 * time.Second):
+		t.Fatal("job did not stop after context cancellation")
+	}
 }

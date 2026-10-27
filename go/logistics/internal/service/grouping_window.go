@@ -128,7 +128,28 @@ func (s *GroupingWindowService) processPendingOrders(ctx context.Context) error 
 	return nil
 }
 
-func StartPendingOrdersJob(ctx context.Context, svc *GroupingWindowService, interval time.Duration){
+func (s *GroupingWindowService) closeActiveWindows(ctx context.Context) error {
+	windowsForRoute, err := s.repo.CloseActiveWindows(ctx)
+	if err != nil {
+		return err
+	}
+	for _, w := range windowsForRoute {
+		if err := s.createRouteEstimation(ctx, w); err != nil {
+			slog.ErrorContext(ctx, "failed to estimate route", "windowId", w.ID, "err", err)
+			return err
+		}
+		continue
+	}
+	return nil
+}
+
+func (s *GroupingWindowService) createRouteEstimation(ctx context.Context, window model.GroupingWindow) error {
+	return nil
+}
+
+// -- jobs
+
+func StartPendingOrdersJob(ctx context.Context, svc *GroupingWindowService, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -136,19 +157,45 @@ func StartPendingOrdersJob(ctx context.Context, svc *GroupingWindowService, inte
 
 	for {
 		select {
-		case <- ctx.Done():
+		case <-ctx.Done():
 			return
-		case <- ticker.C:
-			if !mu.TryLock(){
+		case <-ticker.C:
+			if !mu.TryLock() {
 				slog.WarnContext(ctx, "skipping pending orders cycle: previous still running")
 				continue
 			}
-			func(){
+			func() {
 				defer mu.Unlock()
-				if err := svc.processPendingOrders(ctx); err !=nil{
+				if err := svc.processPendingOrders(ctx); err != nil {
 					slog.ErrorContext(ctx, "pending orders job failed", "err", err)
 				}
 			}()
 		}
 	}
+}
+
+func CheckActiveWindowsJob(ctx context.Context, svc *GroupingWindowService, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	var mu sync.Mutex
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if !mu.TryLock() {
+				slog.WarnContext(ctx, "skipping check active windows cycle: previous still running")
+				continue
+			}
+			func() {
+				defer mu.Unlock()
+				if err := svc.closeActiveWindows(ctx); err != nil {
+					slog.ErrorContext(ctx, "check active windows job failed", "err", err)
+				}
+			}()
+		}
+	}
+
 }

@@ -57,6 +57,11 @@ CREATE TABLE grouping_windows (
 )
 
 CREATE INDEX idx_grouping_windows_status_opened ON grouping_windows(status, opened_at)
+CREATE INDEX idx_windows_expiry ON grouping_windows((opened_at + make_interval(mins => max_time_minutes)))
+    WHERE status = 'ACTIVE'
+CREATE INDEX idx_full_windows ON grouping_windows(id)
+    WHERE status = 'ACTIVE' AND (order_count >= max_orders)
+
 
 CREATE TABLE delivery_orders (
     id                       uuid PRIMARY KEY DEFAULT gen_random_uuid(),
